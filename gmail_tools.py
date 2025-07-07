@@ -2,9 +2,11 @@ import os.path
 import random
 import base64
 import re
+import threading
+import time
 
 from pathlib import Path
-from typing import Union
+from typing import Union, Callable
 from datetime import date
 from urllib.parse import urlparse
 
@@ -32,9 +34,26 @@ class Email:
 
 
 # Scopes needed for now
-SCOPES = ["https://www.googleapis.com/auth/gmail.modify",
-          "https://www.googleapis.com/auth/calendar"]
+SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
+
+def print_msg():
+    print("mail's here")
+
+
+def check_for_new_email(gmail: Resource, func: Callable, *args):
+    latest_id = gmail.users().getProfile(userId='me').execute()['historyId']
+    while True:
+        time.sleep(15.)
+        new_id = gmail.users().getProfile(userId='me').execute()['historyId']
+        if latest_id != new_id:
+            func(*args)
+            latest_id = new_id
+        print("checked email")
+        
+def start_email_checking(gmail: Resource, func: Callable, *args):
+    thread = threading.Thread(target=check_for_new_email, daemon=True, args=(gmail, func, *args))
+    thread.start()
 
 def get_creds(creds_dir: Union[Path, str], scopes: list[str]):
     creds = None
@@ -123,6 +142,7 @@ def extract_email_text(part):
 if __name__ == "__main__":
     creds = get_creds("ArthurCreds", SCOPES)
     gmail = init_gmail(creds)
+    start_email_checking(gmail, print_msg)
     print(query_inbox(gmail, start='2025/07/01', end='2025/07/02', max_results=10))
 
 
