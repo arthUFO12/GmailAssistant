@@ -9,11 +9,11 @@
 My solution is to implement a gmail assistant that exists as a popup box in the corner of the screen. Through this interface, the user will be able to ask requests such as categorizing the inbox into the best fitting labels, preparing a brief of unread emails, and checking availability on a certain day or time.
 
 #### Labeling
-The assistant will be given a list of predecided labels for to categorize emails into the labels 'needs reply', 'action required', 'needs scheduling', and 'miscellaneous information'. It will then retroactively apply these labels to existing emails in the inbox. Incoming emails will automatically be categorized into the correct labels. 
+1. The assistant will first categorize emails into important and unimportant. Personal emails from other individuals will be prioritized and promotional and social emails will be marked as unimportant by default. The user can also provide input to what emails should be marked as important or unimportant, such as, 'all emails from linkedin are important' or 'all emails pertaining to social media are important'.
+2. The assistant will then be given a list of predecided labels for to categorize emails into the labels 'needs reply', 'action required', 'needs scheduling', and 'miscellaneous information'. It will then retroactively apply these labels to existing emails in the inbox. Incoming emails will automatically be categorized into the correct labels. 
 
 Possible features: 
-1. An additional step in deciding if an email is important or not, taking into account the sender and content of the email. The user will can also define what they think is important, 
-2. More specific categorizing based off of user input, e.g. 'organize the subscriptions label by company', 'put all emails older than a year in a 'to delete' label'.
+1. More specific categorizing based off of user input, e.g. 'organize the subscriptions label by company', 'put all emails older than a year in a 'to delete' label'.
 
 #### Summarizing
 The assistant will prepare briefs after the inbox between certain dates. The user will also be able to query emails to summarize, e.g. 'summarize my last conversation with joe bradford'.
