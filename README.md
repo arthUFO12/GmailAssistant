@@ -9,7 +9,7 @@
 My solution is to implement a gmail assistant that exists as a popup box in the corner of the screen. Through this interface, the user will be able to ask requests such as categorizing the inbox into the best fitting labels, preparing a brief of unread emails, and checking availability on a certain day or time.
 
 #### Labeling
-The assistant will be given a list of predecided labels for to categorize emails into such as 'needs reply' or 'action required'. It will then retroactively apply these labels to existing emails in the inbox. Applying the correct filters will handle the job of automatically categorizing new emails. 
+The assistant will be given a list of predecided labels for to categorize emails into the labels 'needs reply', 'action required', 'needs scheduling', and 'miscellaneous information'. It will then retroactively apply these labels to existing emails in the inbox. Applying the correct filters will handle the job of automatically categorizing new emails. 
 
 Possible feature: More specific categorizing based off of user input, e.g. 'organize the subscriptions label by company', 'put all emails older than a year in a 'to delete' label'.
 
