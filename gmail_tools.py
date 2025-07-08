@@ -17,9 +17,10 @@ from googleapiclient.discovery import build, Resource
 from googleapiclient.errors import HttpError
 
 class Email:
-    def __init__(self, sender: str, subject: str, text=None):
+    def __init__(self, sender: str, subject: str, msg_id: str, text=None):
         self.sender = sender
         self.subject = subject
+        self.msg_id = msg_id
         self.text = text
     
     def __str__(self):
@@ -41,18 +42,53 @@ def print_msg():
     print("mail's here")
 
 
+def get_label_id(gmail: Resource, label_name: str) -> str:
+    response = gmail.users().labels().list(userId='me').execute()
+    labels = response.get('labels', [])
+
+    label_id = None
+    for label in labels:
+        if label['name'] == label_name:
+            label_id = label['id']
+            break
+
+    return label_id
+
+def add_email_label(gmail: Resource, email: Email, label_name: str):
+    label_id = get_label_id(gmail, label_name)
+    gmail.users().messages().modify(
+        userId='me',
+        id=email.msg_id,
+        body={
+            'addLabelIds': [label_id]
+        }
+    ).execute()
+
+def remove_email_label(gmail: Resource, email: Email, label_name: str):
+    label_id = get_label_id(gmail, label_name)
+    gmail.users().messages().modify(
+        userId='me',
+        id=email.msg_id,
+        body={
+            'removeLabelIds': [label_id]
+        }
+    ).execute()
+
+
 def check_for_new_email(gmail: Resource, func: Callable, *args):
     latest_id = gmail.users().getProfile(userId='me').execute()['historyId']
+
     while True:
         time.sleep(15.)
         new_id = gmail.users().getProfile(userId='me').execute()['historyId']
         if latest_id != new_id:
             func(*args)
             latest_id = new_id
+
         print("checked email")
         
 def start_email_checking(gmail: Resource, func: Callable, *args):
-    thread = threading.Thread(target=check_for_new_email, daemon=True, args=(gmail, func, *args))
+    thread = threading.Thread(target=check_for_new_email, daemon=False, args=(gmail, func, *args))
     thread.start()
 
 def get_creds(creds_dir: Union[Path, str], scopes: list[str]):
@@ -108,19 +144,22 @@ def query_inbox(gmail_service: Resource, start: Union[date, str] = None,
 
         payload = msg_data.get('payload', {})
         headers = payload.get('headers', [])
-        parts = payload.get('parts', [])
 
         header_dict = {h['name']: h['value'] for h in headers}
 
-        email = Email(header_dict['From'], header_dict['Subject'])
-        body = strip_urls(extract_email_text(payload)).strip()
-        email.text = re.sub(r'\n+', '\n', body)
+        email = Email(header_dict['From'], header_dict['Subject'], msg['id'])
+        
+        if s := extract_email_text(payload):
+            body = strip_urls(s).strip()
+            email.text = re.sub(r'\n+', '\n', body)
+        else:
+            email.text = None
+
         query_results.append(email)
 
     return query_results
 
 def strip_urls(text: str) -> str:
-    
     return re.sub(r'https?://[^\s]+',replace_helper, text)
 
 def replace_helper(match: re.Match) -> str:
@@ -143,7 +182,9 @@ if __name__ == "__main__":
     creds = get_creds("ArthurCreds", SCOPES)
     gmail = init_gmail(creds)
     start_email_checking(gmail, print_msg)
-    print(query_inbox(gmail, start='2025/07/01', end='2025/07/02', max_results=10))
+    emails = query_inbox(gmail, start='2025/07/01', max_results=5)
+    remove_email_label(gmail, emails[0], 'Notes')
+
 
 
 
