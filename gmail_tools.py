@@ -246,7 +246,7 @@ if __name__ == "__main__":
     init_gmail(creds)
     start_email_checking(creds, print_msg)
 
-    emails = query_inbox(start='2025/07/01', max_results=10)
+    emails = query_inbox(start='2025/07/01', max_results=30)
     add_email_label(emails[0], 'Notes')
     print(emails)
     
