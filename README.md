@@ -1,16 +1,16 @@
 ## Gmail Assistant
 
 ### Problems to Solve
-1. Gmail inboxes don't have categories for emails that might require a reply or action.
+1. Gmail inboxes don't have categories for emails that might require a reply or action, and sometimes you may forget to reply to an email or perform an action specified in an email.
 2. Many Gmail inboxes aren't checked for long periods of times, or receive large volumes of emails in short amounts of times that are difficult to navigate.
 3. When receiving an email about an upcoming event, it's sometimes cumbersome to have to switch between Gmail and google calendar to check availability.
 
 ### Solution
-My solution is to implement a gmail assistant that exists as a popup box in the corner of the screen. Through this interface, the user will be able to ask requests such as categorizing the inbox into the best fitting labels, preparing a brief of unread emails, and checking availability on a certain day or time.
+My solution is to implement a gmail assistant that exists as a popup box in the corner of the screen. Through this interface, the user will be able to query their inbox for information, preparing a brief of unread emails, check availability on a certain day or time, schedule reminders in google calendar for replies or actions, as well as events. The assistant will also be proactive, automatically categorizing emails into different categories based on content and providing useful suggestions to the user based on that categorization.
 
 #### Labeling
 1. The assistant will first categorize emails into important and unimportant. Personal emails from other individuals will be prioritized and promotional and social emails will be marked as unimportant by default. The user can also provide input to what emails should be marked as important or unimportant, such as, 'all emails from linkedin are important' or 'all emails pertaining to social media are important'.
-2. The assistant will then be given a list of predecided labels for to categorize emails into the labels 'needs reply', 'action required', 'needs scheduling', and 'miscellaneous information'. It will then retroactively apply these labels to existing emails in the inbox. Incoming emails will automatically be categorized into the correct labels. 
+2. The assistant will then be given a list of predecided labels for to categorize emails into the labels 'needs reply', 'action required', 'needs scheduling', and 'miscellaneous information'. It will then retroactively apply these labels to existing emails in the inbox. Incoming emails will automatically be categorized into the correct labels. The Assistant will them ask the user what action they might want to take with this email, i.e. 'do you want to schedule a reminder to reply to this email' or 'do you want me to give you your availability on the day of this event?'.
 
 Possible features: 
 1. More specific categorizing based off of user input, e.g. 'organize the subscriptions label by company', 'put all emails older than a year in a 'to delete' label'.
