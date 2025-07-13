@@ -1,5 +1,4 @@
 import os.path
-import random
 import base64
 import re
 import threading
@@ -9,6 +8,7 @@ from pathlib import Path
 from typing import Union, Callable
 from datetime import date
 from urllib.parse import urlparse
+from dateutil import parser
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -17,23 +17,34 @@ from googleapiclient.discovery import build, Resource
 from googleapiclient.errors import HttpError
 
 
+SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
+gmail = None
+map_of_labels = {}
+user_email = None
 
 
 
 class Email:
-    def __init__(self, sender: str, subject: str, msg_id: str, label_ids: list[str], text=None):
+    def __init__(self, sender: str, recipients: list[str], date: date, subject: str, msg_id: str, label_ids: list[str], text=None):
         self.sender = sender
+        self.recipients = recipients
+        self.date = date
         self.subject = subject
         self.msg_id = msg_id
         self.label_ids = label_ids
         self.text = text
+
+        for i in range(self.recipients):
+            if self.recipients[i] == user_email:
+                self.recipients[i] == 'me'
     
     def __str__(self):
         return (
-            f"sender: {self.sender}\n"
-            f"subject: {self.subject}\n"
+            f"Message from {self.sender} "
+            f"to {self.recipients} "
+            f"sent on {self.date.strftime("%m/%d/%Y")} "
+            f"with subject {self.subject}\n"
             f"text: {self.text}\n"
-            f"label_ids: {self.label_ids}"
         )
     
     def __repr__(self):
@@ -42,9 +53,6 @@ class Email:
 
 
 # Scopes needed for now
-SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
-gmail = None
-map_of_labels = {}
 
 def get_all_label_ids():
     response = gmail.users().labels().list(userId='me').execute()
@@ -60,44 +68,54 @@ def print_msg():
 
 def add_email_label(email: Email, label_name: str):
     label_id = map_of_labels[label_name]
-    gmail.users().messages().modify(
-        userId='me',
-        id=email.msg_id,
-        body={
-            'addLabelIds': [label_id]
-        }
-    ).execute()
+    try:
+        gmail.users().messages().modify(
+            userId='me',
+            id=email.msg_id,
+            body={
+                'addLabelIds': [label_id]
+            }
+        ).execute()
+    except HttpError as error:
+        print(f'An error occurred: {error}')
+        return
     email.label_ids.append(label_id)
 
 def remove_email_label(email: Email, label_name: str):
     label_id = map_of_labels[label_name]
-    gmail.users().messages().modify(
-        userId='me',
-        id=email.msg_id,
-        body={
-            'removeLabelIds': [label_id]
-        }
-    ).execute()
+    try:
+        gmail.users().messages().modify(
+            userId='me',
+            id=email.msg_id,
+            body={
+                'removeLabelIds': [label_id]
+            }
+        ).execute()
+    except HttpError as error:
+        print(f'An error occurred: {error}')
+        return
     email.label_ids.remove(label_id)
 
 def create_label(label_name: str, color=None):
     label_body = {
         "name": label_name,
-        "labelListVisibility": "labelShow",     # or 'labelHide'
-        "messageListVisibility": "show",        # or 'hide'
+        "labelListVisibility": "labelShow",     
+        "messageListVisibility": "show",        
     }
 
     if color:
         label_body["color"] = {
             "textColor": "#000000",
-            "backgroundColor": color            # e.g. "#FBE983"
+            "backgroundColor": color           
         }
 
-    label = gmail.users().labels().create(
-        userId='me',
-        body=label_body
-    ).execute()
-
+    try: 
+        label = gmail.users().labels().create(
+            userId='me',
+            body=label_body
+        ).execute()
+    except HttpError as error:
+        print(f'An error occurred: {error}')
 
     return label
 
@@ -110,7 +128,8 @@ def _retrieve_email_from_id(gmail: Resource, id) -> Email:
 
     header_dict = {h['name']: h['value'] for h in headers}
 
-    email = Email(header_dict['From'], header_dict['Subject'], id, msg_data.get('labelIds', []))
+    email = Email(header_dict['From'], header_dict.get['To'].split(','), parser.parse(header_dict['Date']).date(),
+                  header_dict.get('Subject', None), id, msg_data.get('labelIds', []))
     
     if s := extract_email_text(payload):
         body = strip_urls(s).strip()
@@ -191,9 +210,10 @@ def get_creds(creds_dir: Union[Path, str], scopes: list[str]):
     return creds
     
 def init_gmail(creds):
-    global gmail 
+    global gmail, user_email
 
     gmail = build('gmail', 'v1', credentials=creds)
+    user_email = gmail.users().getProfile(userId='me').execute()['emailAddress']
     map_of_labels.update(get_all_label_ids())
 
 def normalize_date(d: Union[date, str]) -> str:
