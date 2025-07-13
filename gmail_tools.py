@@ -175,8 +175,9 @@ def _check_for_new_email(worker_gmail: Resource, func: Callable, *args):
     while True:
         time.sleep(5.)
         new_id = worker_gmail.users().getProfile(userId='me').execute()['historyId']
-        if latest_id != new_id and (new_emails := _retrieve_new_emails(worker_gmail, latest_id)):
-            func(*args)
+        if latest_id != new_id:
+            if new_emails := _retrieve_new_emails(worker_gmail, latest_id):
+                func(*args)
             latest_id = new_id
         print("checked email")
         
