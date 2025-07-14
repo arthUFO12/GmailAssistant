@@ -168,6 +168,7 @@ def _retrieve_new_emails(worker_gmail: Resource, history_id) -> list[Email]:
     return new_emails
 
 
+
 def _check_for_new_email(worker_gmail: Resource, func: Callable, *args):
     
     latest_id = worker_gmail.users().getProfile(userId='me').execute()['historyId']
