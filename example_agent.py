@@ -1,9 +1,10 @@
 import os
 import json
 
-from datetime import date
-from pydantic import BaseModel
+from datetime import date, datetime
+from pydantic import BaseModel, Field, validate_call
 from typing import TypedDict
+
 
 import google.generativeai as genai
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -16,21 +17,75 @@ from langgraph.checkpoint.memory import MemorySaver
 from IPython.display import Image, display
 
 
+
+from data_schemas import CreateEvent
+import calendar_tools
+
 os.environ['GOOGLE_API_KEY'] = json.load(open('ArthurCreds/gemini.json'))['key']
 
-@tool
-def get_user_availability(day: int, month: int, year: int):
-    """Call this to get the user's availability on a certain date"""
-    return f"On {day}/{month}/{year} the user has a soccer game from 4-6pm."
+SYSTEM_PROMPT = ("You are a helpful AI assistant responsible for managing a user's Gmail inbox and Google Calendar.\n\n"
+                "Your goal is to help the user efficiently respond to emails and manage events by using ONLY the tools provided to you. "
+                "You MUST call tools instead of making assumptions, especially when the information you need is available via a tool. "
+                "If a new email arrives that could involve checking calendar availability, scheduling a meeting, or replying to the sender, "
+                "ALWAYS use the appropriate tool before speaking to the user.\n\n"
+                "All tool outputs are direct responses from official Google Services APIs. Dates will be given in DD/MM/YYYY format. The user's time zone is \"America/New_York\".\n\n"
+                "Task:\n"
+                "- The user's inbox just received an email about an overnight trip to Rhode Island from 06/08/2025 to 07/08/2025.\n"
+                "- Let the user know about the information contained in the email."
+                "- Ask the user whether they’d like you to use any of the relevant tools available to you.\n"
+                "Goal: Schedule the event on the user's calendar, unless ask not to.\n"
+                "Rules:\n"
+                "- Give the user dates in month name-day format.\n"
+                "- Continue to ask the user questions and perform actions until conflicts between events are resolved.\n"
+                "- Ensure you ask the user answers whether they want to schedule the event.\n"
+                "- Stop if there’s no logical next step.\n"
+                "- Only perform tasks the user or system explicitly tells you to.\n"
+                "- EXCEPTION: Before scheduling events check availability for it if you haven't already.\n"
+                "- You may ONLY use PromptUser, GiveUserInfo, and ConfirmRequestCompletion to speak to the user.")
 
 @tool
-def schedule_event(event_description: str, day: int, month: int, year: int, hour: int):
-    """Call this to schedule an event for the user. The hour ranges from 0-23."""
-    return f"Scheduled an event for \"{event_description}\" on {day}/{month}/{year} at {hour}:00 military time."
+@validate_call
+def check_availability(
+        start: datetime = Field(..., description="Start of date-time of the search range in ISO 8601 format."), 
+        end: datetime = Field(..., description="End of date of the search range in ISO 8601 format.")
+    ):
+    """Call this to check the user's availability between a range of date-times. Returns a list of JSON object with event data between the specified times."""
+    return calendar_tools.get_events_in_range(start, end)
 
+
+@tool
+@validate_call
+def search_for_events_in_range(
+        start: datetime = Field(..., description="Start of date of the search range in ISO 8601 format."), 
+        end: datetime = Field(..., description="End of date of the search range in ISO 8601 format.")
+    ):
+    """Call this to search for events in between a certain range."""
+    return calendar_tools.get_events_in_range(start,end)
+
+@tool
+@validate_call
+def change_event_time(
+        event_id: str = Field(..., description="ID of the event provided by the google."),
+        start: datetime = Field(..., description="The new start time of the event in ISO 8601 format."),
+        end: datetime = Field(..., description="The new end time of the event in ISO 8601 format.")
+    ):
+    """Call this to change the time of an event you have the google services api provided ID for. If you don't have it, first search for the event using search_for_event_in_range and obtain the ID from the tool."""
+    return calendar_tools.reschedule_event(event_id, start, end)
+
+@tool
+@validate_call
+def cancel_event(
+        event_id: str = Field(..., description="ID of the event provided by google.")
+    ):
+    """Call this tool to delete an event you have the google services api provided ID for. If you don't have it, first search for the event using search_for_event_in_range and obtain the ID from the tool."""
+    return calendar_tools.remove_event(event_id)
+
+
+class ConfirmRequestCompletion(BaseModel):
+    """Send the user a message indicating their request was completed. Purpose is to confirm a user requested task was completed."""
+    message: str
 class GiveUserInfo(BaseModel):
-    """Send the user useful information. Purpose is to send the user information or to be sent or confirm a task was completed.
-    The information should not contain questions."""
+    """Send the user useful information. The information should not contain questions."""
     info: str
 
 class PromptUser(BaseModel):
@@ -39,11 +94,11 @@ Ensure you only ask the user to perform actions that are in your tools."""
     prompt: str
 
 
-tools = [get_user_availability, schedule_event]
+tools = [check_availability, change_event_time, cancel_event, search_for_events_in_range]
 tool_node = ToolNode(tools)
 
 model = ChatGoogleGenerativeAI(model='gemini-1.5-pro')
-model = model.bind_tools(tools + [PromptUser, GiveUserInfo])
+model = model.bind_tools(tools + [PromptUser, GiveUserInfo, CreateEvent, ConfirmRequestCompletion])
 
 def talk_to_user(state):
     last_message = state["messages"][-1]
@@ -54,6 +109,10 @@ def talk_to_user(state):
 
     if (call := check_for_tool(last_message, "PromptUser")):
         tool_responses.append(prompt_user(call))
+
+    if (call := check_for_tool(last_message, "ConfirmRequestCompletion")):
+        tool_responses.append(confirm_request_completion(call))
+    
 
     return {"messages": state["messages"] + tool_responses}
         
@@ -68,6 +127,8 @@ def should_continue(state):
     messages = state["messages"]
     last_message = messages[-1]
     # If there is no function call, then we finish
+    
+
     if not last_message.tool_calls:
         return END
     # If tool call is asking Human, we return that node
@@ -77,12 +138,22 @@ def should_continue(state):
         return "talk_to_user"
     elif check_for_tool(last_message, "GiveUserInfo"):
         return "talk_to_user"
+    elif check_for_tool(last_message, "ConfirmRequestCompletion"):
+        return "talk_to_user"
+    elif check_for_tool(last_message, "CreateEvent"):
+        return "create_event"
     # Otherwise if there is, we continue
     else:
         return "action"
 
 def call_model(state):
     messages = state["messages"]
+
+    i = -1
+    while isinstance(messages[i], ToolMessage):
+        i -= 1
+    messages.insert(i + 1, SystemMessage(content=SYSTEM_PROMPT))
+    
     response = model.invoke(messages)
     # We return a list, because this will get added to the existing list
     
@@ -97,6 +168,15 @@ def give_user_info(call: dict) -> ToolMessage:
 
     return tool_message
 
+def confirm_request_completion(call: dict) -> ToolMessage:
+    tool_call_id = call["id"]
+    message = ConfirmRequestCompletion.model_validate(call["args"])
+    print(message.message)
+    # highlight-next-line
+    tool_message = ToolMessage(tool_call_id=tool_call_id, content="User received request completion confirmation.")
+
+    return tool_message
+
 def prompt_user(call: dict) -> ToolMessage:
     tool_call_id = call["id"]
     ask = PromptUser.model_validate(call["args"])
@@ -107,7 +187,14 @@ def prompt_user(call: dict) -> ToolMessage:
 
     return tool_message
 
+def create_event(state):
+    call = state["messages"][-1].tool_calls[0]
+    tool_call_id = call["id"]
+    event = CreateEvent.model_validate(call["args"])
+    response = calendar_tools.add_event(event)
+    tool_message = ToolMessage(tool_call_id=tool_call_id, content=response)
 
+    return {"messages": state["messages"] + [tool_message]}
 
 workflow = StateGraph(MessagesState)
 
@@ -115,6 +202,7 @@ workflow = StateGraph(MessagesState)
 workflow.add_node("agent", call_model)
 workflow.add_node("action", tool_node)
 workflow.add_node("talk_to_user", talk_to_user)
+workflow.add_node("create_event", create_event)
 
 workflow.add_edge(START, "agent")
 
@@ -124,11 +212,12 @@ workflow.add_conditional_edges(
     "agent",
     # Next, we pass in the function that will determine which node is called next.
     should_continue,
-    path_map=["action", "talk_to_user", END]
+    path_map=["action", "talk_to_user", "create_event", "agent", END]
 )
 
 workflow.add_edge("action", "agent")
 workflow.add_edge("talk_to_user", "agent")
+workflow.add_edge("create_event", "agent")
 
 memory = MemorySaver()
 
@@ -143,11 +232,10 @@ config = {"configurable": {"thread_id": "1"}}
 for event in app.stream(
     {
         "messages": [
-            {"role" : "system", "content":"You are a helpful AI assistant helping manage a user's inbox. " \
-             "The human prompting you is the chief manager of the inbox and not the user. " },
-            {"role" : "human", "content": """The user's inbox just received an email from their co-worker asking to get lunch around 1pm on 28/7/2025.  
-Using your tools, either let the user know this information and, if appropriate, ask them if they'd like you to use any of the tools that could be useful in this context. 
-Complete their request and stop if there is no logical next step"""}
+            {
+                "role" : "human", 
+                "content": "Help the user with the new message."
+            }
         ]
     },
     config,

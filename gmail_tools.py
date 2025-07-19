@@ -4,6 +4,8 @@ import re
 import threading
 import time
 
+from data_schemas import Email
+
 from pathlib import Path
 from typing import Union, Callable
 from datetime import date
@@ -17,39 +19,13 @@ from googleapiclient.discovery import build, Resource
 from googleapiclient.errors import HttpError
 
 
-SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
+SCOPES = ["https://www.googleapis.com/auth/gmail.modify",
+        "https://www.googleapis.com/auth/calendar",
+        "https://www.googleapis.com/auth/tasks"]
+
 gmail = None
 map_of_labels = {}
 user_email = None
-
-
-
-class Email:
-    def __init__(self, sender: str, recipients: list[str], date: date, subject: str, msg_id: str, label_ids: list[str], text=None):
-        self.sender = sender
-        self.recipients = recipients
-        self.date = date
-        self.subject = subject
-        self.msg_id = msg_id
-        self.label_ids = label_ids
-        self.text = text
-
-        for i in range(self.recipients):
-            if self.recipients[i] == user_email:
-                self.recipients[i] == 'me'
-    
-    def __str__(self):
-        return (
-            f"Message from {self.sender} "
-            f"to {self.recipients} "
-            f"sent on {self.date.strftime("%m/%d/%Y")} "
-            f"with subject {self.subject}\n"
-            f"text: {self.text}\n"
-        )
-    
-    def __repr__(self):
-        return str(self)
-
 
 
 # Scopes needed for now
