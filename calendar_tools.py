@@ -8,10 +8,12 @@ import json
 from pathlib import Path
 from typing import Union, Callable
 from datetime import date, datetime
-import pytz
 from urllib.parse import urlparse
 from dateutil import parser
 from pydantic import BaseModel
+
+import pytz
+import iso8601
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -95,7 +97,7 @@ def get_events_in_range(start: datetime, end: datetime) -> str:
             "start": e['start'],
             "end": e['end'],
             "summary": e['summary'],
-            "description": e['description'][:20] if 'description' in e else None,
+            "description": e['description'][:30] if 'description' in e else None,
             "location": e.get('location', None),
             "recurrence": e.get('recurrence', None),
             "reminders": e.get('reminders', None)
@@ -103,17 +105,19 @@ def get_events_in_range(start: datetime, end: datetime) -> str:
 
         if 'attendees' in e and len(e['attendees']) < 5:
             data["attendees"] = e['attendees']
+
         cleaned_data = {k: v for k, v in data.items() if v is not None}
-        event_list.append(json.dumps(cleaned_data))
+        event_list.append(cleaned_data)
 
-    return str(event_list)
+    return "JSON list of events in this range:\n" + json.dumps(event_list, indent=2) + "\n"
 
 
-def get_tasks_in_range(start: datetime, end: datetime) -> list[str]:
+def get_tasks_in_range(start: datetime, end: datetime) -> str:
+    global tasks
     results = tasks.tasklists().list(maxResults=10).execute()
     tasklists = results.get('items', [])
 
-    all_tasks = []
+    tasks_in_range = []
     for tasklist in tasklists:
         tasks_results = tasks.tasks().list(
             tasklist=tasklist['id'],
@@ -121,10 +125,18 @@ def get_tasks_in_range(start: datetime, end: datetime) -> list[str]:
             showDeleted=False,
             maxResults=10
         ).execute()
-        all_tasks += json.loads(tasks_results['items'])
 
+        items = tasks_results.get('items', [])
+        
+        for task in items:
+            time = datetime.fromisoformat(task['due']).replace(tzinfo=None)
+            
+            time = eastern.localize(time)
+            
+            if start <= time <= end:
+                tasks_in_range.append(task)
 
-    return all_tasks
+    return "JSON list of tasks in this range:\n" + json.dumps(tasks_in_range, indent=4) + "\n"
 
 def get_creds(creds_dir: Union[Path, str], scopes: list[str]):
     creds = None
@@ -152,4 +164,5 @@ def get_creds(creds_dir: Union[Path, str], scopes: list[str]):
 
 creds = get_creds("ArthurCreds", SCOPES)
 init_calendar(creds)
+init_tasks(creds)
 

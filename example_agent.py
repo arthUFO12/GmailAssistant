@@ -31,36 +31,30 @@ SYSTEM_PROMPT = ("You are a helpful AI assistant responsible for managing a user
                 "All tool outputs are direct responses from official Google Services APIs. Dates will be given in DD/MM/YYYY format. The user's time zone is \"America/New_York\".\n\n"
                 "Task:\n"
                 "- The user's inbox just received an email about an overnight trip to Rhode Island from 06/08/2025 to 07/08/2025.\n"
-                "- Let the user know about the information contained in the email."
+                "- Let the user know about the information contained in the email.\n"
                 "- Ask the user whether they’d like you to use any of the relevant tools available to you.\n"
-                "Goal: Schedule the event on the user's calendar, unless ask not to.\n"
+                "Goal: Schedule the event on the user's calendar, unless they ask not to.\n"
                 "Rules:\n"
                 "- Give the user dates in month name-day format.\n"
-                "- Continue to ask the user questions and perform actions until conflicts between events are resolved.\n"
+                "- Continue to ask the user questions and perform actions until conflicts between events and tasks are resolved.\n"
                 "- Ensure you ask the user answers whether they want to schedule the event.\n"
                 "- Stop if there’s no logical next step.\n"
                 "- Only perform tasks the user or system explicitly tells you to.\n"
-                "- EXCEPTION: Before scheduling events check availability for it if you haven't already.\n"
-                "- You may ONLY use PromptUser, GiveUserInfo, and ConfirmRequestCompletion to speak to the user.")
+                "- EXCEPTION: Before scheduling events check availability for it if you haven't already. If there are conflicts, ask the user what you should do.\n"
+                "- You may ONLY use PromptUser, GiveUserInfo, and ConfirmRequestCompletion to speak to the user.\n"
+                "- You may ONLY use PromptUser, GiveUserInfo, and ConfirmRequestCompletion in one response, all other tools must be called in different responses.\n"
+                "- Once you have completed the user's request, STOP.")
 
-@tool
-@validate_call
-def check_availability(
-        start: datetime = Field(..., description="Start of date-time of the search range in ISO 8601 format."), 
-        end: datetime = Field(..., description="End of date of the search range in ISO 8601 format.")
-    ):
-    """Call this to check the user's availability between a range of date-times. Returns a list of JSON object with event data between the specified times."""
-    return calendar_tools.get_events_in_range(start, end)
 
 
 @tool
 @validate_call
-def search_for_events_in_range(
+def search_user_availability(
         start: datetime = Field(..., description="Start of date of the search range in ISO 8601 format."), 
         end: datetime = Field(..., description="End of date of the search range in ISO 8601 format.")
     ):
-    """Call this to search for events in between a certain range."""
-    return calendar_tools.get_events_in_range(start,end)
+    """Call this to check the user's availability between a certain range of times.\n Event object important fields:\n 1. summary - name of the event.\n 2. start - start time and timezone of the event.\n 3. end - end time and timezone of the event."""
+    return calendar_tools.get_events_in_range(start,end) + calendar_tools.get_tasks_in_range(start,end)
 
 @tool
 @validate_call
@@ -69,7 +63,7 @@ def change_event_time(
         start: datetime = Field(..., description="The new start time of the event in ISO 8601 format."),
         end: datetime = Field(..., description="The new end time of the event in ISO 8601 format.")
     ):
-    """Call this to change the time of an event you have the google services api provided ID for. If you don't have it, first search for the event using search_for_event_in_range and obtain the ID from the tool."""
+    """Call this to change the time of an event you have the google services api provided ID for. If you don't have it, first search for the event using search_user_availability and obtain the ID from the tool."""
     return calendar_tools.reschedule_event(event_id, start, end)
 
 @tool
@@ -77,7 +71,7 @@ def change_event_time(
 def cancel_event(
         event_id: str = Field(..., description="ID of the event provided by google.")
     ):
-    """Call this tool to delete an event you have the google services api provided ID for. If you don't have it, first search for the event using search_for_event_in_range and obtain the ID from the tool."""
+    """Call this tool to delete an event you have the google services api provided ID for. If you don't have it, first search for the event using search_user_availability and obtain the ID from the tool."""
     return calendar_tools.remove_event(event_id)
 
 
@@ -94,7 +88,7 @@ Ensure you only ask the user to perform actions that are in your tools."""
     prompt: str
 
 
-tools = [check_availability, change_event_time, cancel_event, search_for_events_in_range]
+tools = [change_event_time, cancel_event, search_user_availability]
 tool_node = ToolNode(tools)
 
 model = ChatGoogleGenerativeAI(model='gemini-1.5-pro')
@@ -148,7 +142,7 @@ def should_continue(state):
 
 def call_model(state):
     messages = state["messages"]
-
+    print(messages[-1])
     i = -1
     while isinstance(messages[i], ToolMessage):
         i -= 1
