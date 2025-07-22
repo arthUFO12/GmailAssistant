@@ -18,7 +18,7 @@ from IPython.display import Image, display
 
 
 
-from data_schemas import CreateEvent
+from data_schemas import CreateEvent, CreateTask
 import calendar_tools
 
 os.environ['GOOGLE_API_KEY'] = json.load(open('ArthurCreds/gemini.json'))['key']
@@ -30,17 +30,21 @@ SYSTEM_PROMPT = ("You are a helpful AI assistant responsible for managing a user
                 "ALWAYS use the appropriate tool before speaking to the user.\n\n"
                 "All tool outputs are direct responses from official Google Services APIs. Dates will be given in DD/MM/YYYY format. The user's time zone is \"America/New_York\".\n\n"
                 "Task:\n"
-                "- The user's inbox just received an email about an overnight trip to Rhode Island from 06/08/2025 to 07/08/2025.\n"
+                "- The user's inbox just received an email from arthstir06@gmail.com about a party happening in Hartford, CT on 07/08/2025 from 8pm to 11pm.\n"
                 "- Let the user know about the information contained in the email.\n"
                 "- Ask the user whether they’d like you to use any of the relevant tools available to you.\n"
-                "Goal: Schedule the event on the user's calendar, unless they ask not to.\n"
+                "Scheduling Options:\n"
+                "- You can schedule one of two calendar items:\n"
+                "  1. An event. Used for obligations that have a definitive start or end time, e.g. a meeting, trip, or doctor's appointment.\n"
+                "  2. A task. Used for obligations that have a time they must be performed by or due time, e.g. getting groceries, sending an email response, or completing a homework assignment.\n"
+                "Goal: Schedule the appropriate calendar item unless the user tells you not to.\n"
                 "Rules:\n"
-                "- Give the user dates in month name-day format.\n"
+                "- Give the user dates in \"(month name) (day)\" format.\n"
                 "- Continue to ask the user questions and perform actions until conflicts between events and tasks are resolved.\n"
                 "- Ensure you ask the user answers whether they want to schedule the event.\n"
                 "- Stop if there’s no logical next step.\n"
                 "- Only perform tasks the user or system explicitly tells you to.\n"
-                "- EXCEPTION: Before scheduling events check availability for it if you haven't already. If there are conflicts, ask the user what you should do.\n"
+                "- EXCEPTION: Before scheduling caledendar items check availability for it if you haven't already. If there are conflicts, ask the user what you should do.\n"
                 "- You may ONLY use PromptUser, GiveUserInfo, and ConfirmRequestCompletion to speak to the user.\n"
                 "- You may ONLY use PromptUser, GiveUserInfo, and ConfirmRequestCompletion in one response, all other tools must be called in different responses.\n"
                 "- Once you have completed the user's request, STOP.")
@@ -59,24 +63,40 @@ def search_user_availability(
 @tool
 @validate_call
 def change_event_time(
-        event_id: str = Field(..., description="ID of the event provided by the google."),
+        event_id: str = Field(..., description="ID of the event provided by the Google."),
         start: datetime = Field(..., description="The new start time of the event in ISO 8601 format."),
         end: datetime = Field(..., description="The new end time of the event in ISO 8601 format.")
     ):
-    """Call this to change the time of an event you have the google services api provided ID for. If you don't have it, first search for the event using search_user_availability and obtain the ID from the tool."""
+    """Call this to change the time of an event you have the Google Services API provided ID for. If you don't have it, first search for the event using search_user_availability and obtain the ID from the tool."""
     return calendar_tools.reschedule_event(event_id, start, end)
 
 @tool
 @validate_call
 def cancel_event(
-        event_id: str = Field(..., description="ID of the event provided by google.")
+        event_id: str = Field(..., description="ID of the event provided by Google.")
     ):
-    """Call this tool to delete an event you have the google services api provided ID for. If you don't have it, first search for the event using search_user_availability and obtain the ID from the tool."""
+    """Call this tool to delete an event you have the Google Services API provided ID for. If you don't have it, first search for the event using search_user_availability and obtain the ID from the tool."""
     return calendar_tools.remove_event(event_id)
 
+@tool
+@validate_call
+def change_task_time(
+        task_id: str = Field(..., decription="ID of the task provided by Google."),
+        due: datetime = Field(..., description="The new due time of the event in ISO 8601 format.")
+    ):
+    """Call this to change the time of a task you have the Google Services API provided ID for. If you don't have it, first search for the task using search_user_availability and obtain the ID from the tool."""
+    return calendar_tools.reschedule_task(task_id, due)
+
+@tool
+@validate_call
+def cancel_task(
+        task_id: str = Field(..., description="ID of the task provided by Google.")
+    ):
+    """Call this tool to delete a task you have the Google Services API provided ID for. If you don't have it, first search for the task using search_user_availability and obtain the ID from the tool."""
+    return calendar_tools.remove_task(task_id)
 
 class ConfirmRequestCompletion(BaseModel):
-    """Send the user a message indicating their request was completed. Purpose is to confirm a user requested task was completed."""
+    """Send the user a message indicating their request was completed. Purpose is to confirm a user requested task was completed. DO NOT ask follow-up questions. After using this tool, stop."""
     message: str
 class GiveUserInfo(BaseModel):
     """Send the user useful information. The information should not contain questions."""
@@ -88,11 +108,11 @@ Ensure you only ask the user to perform actions that are in your tools."""
     prompt: str
 
 
-tools = [change_event_time, cancel_event, search_user_availability]
+tools = [change_event_time, cancel_event, change_task_time, cancel_task, search_user_availability]
 tool_node = ToolNode(tools)
 
 model = ChatGoogleGenerativeAI(model='gemini-1.5-pro')
-model = model.bind_tools(tools + [PromptUser, GiveUserInfo, CreateEvent, ConfirmRequestCompletion])
+model = model.bind_tools(tools + [PromptUser, GiveUserInfo, CreateEvent, CreateTask, ConfirmRequestCompletion])
 
 def talk_to_user(state):
     last_message = state["messages"][-1]
@@ -136,6 +156,8 @@ def should_continue(state):
         return "talk_to_user"
     elif check_for_tool(last_message, "CreateEvent"):
         return "create_event"
+    elif check_for_tool(last_message, "CreateTask"):
+        return "create_task"
     # Otherwise if there is, we continue
     else:
         return "action"
@@ -190,6 +212,16 @@ def create_event(state):
 
     return {"messages": state["messages"] + [tool_message]}
 
+def create_task(state):
+    call = state["messages"][-1].tool_calls[0]
+    tool_call_id = call["id"]
+    task = CreateTask.model_validate(call["args"])
+    response = calendar_tools.add_task(task)
+    tool_message = ToolMessage(tool_call_id=tool_call_id, content=response)
+
+    return {"messages": state["messages"] + [tool_message]}
+
+
 workflow = StateGraph(MessagesState)
 
 # Define the three nodes we will cycle between
@@ -197,6 +229,7 @@ workflow.add_node("agent", call_model)
 workflow.add_node("action", tool_node)
 workflow.add_node("talk_to_user", talk_to_user)
 workflow.add_node("create_event", create_event)
+workflow.add_node("create_task", create_task)
 
 workflow.add_edge(START, "agent")
 
@@ -206,12 +239,13 @@ workflow.add_conditional_edges(
     "agent",
     # Next, we pass in the function that will determine which node is called next.
     should_continue,
-    path_map=["action", "talk_to_user", "create_event", "agent", END]
+    path_map=["action", "talk_to_user", "create_event", "create_task", "agent", END]
 )
 
 workflow.add_edge("action", "agent")
 workflow.add_edge("talk_to_user", "agent")
 workflow.add_edge("create_event", "agent")
+workflow.add_edge("create_task", "agent")
 
 memory = MemorySaver()
 

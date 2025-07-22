@@ -24,6 +24,7 @@ from data_schemas import CreateTask, CreateEvent
 
 calendar = None
 tasks = None
+default_tasklist = None
 time_zone = None
 eastern = pytz.timezone("America/New_York")
 
@@ -32,6 +33,7 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify",
         "https://www.googleapis.com/auth/tasks"]
 
 def add_event(e: CreateEvent) -> str:
+    global calendar
     event_result = calendar.events().insert(
         calendarId="primary",
         body=e.model_dump(mode='json', exclude_none=True)
@@ -39,13 +41,43 @@ def add_event(e: CreateEvent) -> str:
 
     return f'Event created with ID:\"{event_result['id']}\".'
 
+def add_task(t: CreateTask) -> str:
+    global tasks
+    task_result = tasks.tasks().insert(
+        tasklist=default_tasklist,
+        body=t.model_dump(mode='json', exclude_none=True)
+    ).execute()
+
+    return f'Task created with ID:\"{task_result['id']}\"'
+
+def reschedule_task(task_id: str, due: datetime) -> str:
+
+    global tasks
+    task_result = tasks.tasks().patch(
+        tasklist=default_tasklist,
+        taskId=task_id,
+        body={
+            "due": eastern.localize(due).isoformat() if check_naivety(due) else due.isoformat()
+        }
+    ).execute()
+
+    return f'Task with ID \"{task_id}\" updated to be due at \"{due.isoformat()}\".'
+
+
+def remove_task(task_id: str) -> str:
+    global tasks
+    
+    tasks.tasks().delete(
+        taskslist=default_tasklist,
+        taskId=taskId
+    ).execute()
+
+    return f'Task with ID \"{task_id}\" deleted.'
 
 def check_naivety(dt: datetime):
     return dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None
     
 def reschedule_event(event_id: str, start: datetime, end: datetime) -> str:
-
-
     calendar.events().patch(
         calendarId="primary",
         eventId=event_id,
@@ -77,8 +109,11 @@ def init_calendar(creds):
     time_zone = tz['timeZone']
 
 def init_tasks(creds):
-    global tasks
+    global tasks, default_tasklist
     tasks = build('tasks', 'v1', credentials=creds)
+    tasklists = tasks.tasklists().list().execute().get('items', [])
+    if tasklists: default_tasklist = tasklists[0]['id']
+
 
 def get_events_in_range(start: datetime, end: datetime) -> str:
     global calendar

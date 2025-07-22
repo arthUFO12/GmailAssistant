@@ -61,11 +61,6 @@ class CreateEvent(BaseModel):
     reminders: RemindersAttribute = Field(None, description= "Reminders settings for this event.")
     recurrence: list[str] = Field(None, description= "A list with one entry that contains a string with the recurrence rules of the event specified in the iCalendar RFC 5545 format.")
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: eastern.localize(v).isoformat()
-        }
-
 
 class LinkAttribute(BaseModel):
     type: str = Field(..., description= "The type of link, e.g. 'email', 'document', 'website'.")
@@ -82,5 +77,5 @@ class CreateTask(BaseModel):
 
     class Config:
         json_encoders = {
-            datetime: lambda v: eastern.localize(v).isoformat() if check_naivety(v) else v.isoformat()
+            datetime: lambda v: v.astimezone(eastern).isoformat()
         }
