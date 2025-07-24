@@ -55,7 +55,7 @@ def reschedule_task(task_id: str, due: datetime) -> str:
     global tasks
     task_result = tasks.tasks().patch(
         tasklist=default_tasklist,
-        taskId=task_id,
+        task=task_id,
         body={
             "due": eastern.localize(due).isoformat() if check_naivety(due) else due.isoformat()
         }
@@ -69,7 +69,7 @@ def remove_task(task_id: str) -> str:
     
     tasks.tasks().delete(
         taskslist=default_tasklist,
-        taskId=taskId
+        task=task_id
     ).execute()
 
     return f'Task with ID \"{task_id}\" deleted.'

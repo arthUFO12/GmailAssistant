@@ -30,7 +30,7 @@ SYSTEM_PROMPT = ("You are a helpful AI assistant responsible for managing a user
                 "ALWAYS use the appropriate tool before speaking to the user.\n\n"
                 "All tool outputs are direct responses from official Google Services APIs. Dates will be given in DD/MM/YYYY format. The user's time zone is \"America/New_York\".\n\n"
                 "Task:\n"
-                "- The user's inbox just received an email from arthstir06@gmail.com about a party happening in Hartford, CT on 07/08/2025 from 8pm to 11pm.\n"
+                "- The user's inbox just received an email about a party in Newport, RI on 31/07/2025 from 8pm to 12am.\n"
                 "- Let the user know about the information contained in the email.\n"
                 "- Ask the user whether they’d like you to use any of the relevant tools available to you.\n"
                 "Scheduling Options:\n"
@@ -99,7 +99,7 @@ class ConfirmRequestCompletion(BaseModel):
     """Send the user a message indicating their request was completed. Purpose is to confirm a user requested task was completed. DO NOT ask follow-up questions. After using this tool, stop."""
     message: str
 class GiveUserInfo(BaseModel):
-    """Send the user useful information. The information should not contain questions."""
+    """Send the user useful information. The information should not contain questions. If you want to give the user a follow-up question, it is common to first call GiveUserInfo and then PromptUser in succession."""
     info: str
 
 class PromptUser(BaseModel):
@@ -164,7 +164,7 @@ def should_continue(state):
 
 def call_model(state):
     messages = state["messages"]
-    print(messages[-1])
+
     i = -1
     while isinstance(messages[i], ToolMessage):
         i -= 1
