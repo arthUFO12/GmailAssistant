@@ -22,7 +22,24 @@ gmail = None
 map_of_labels = {}
 user_email = None
 
+URGENCY_LABELS = [
+    "needs_reply",
+    "follow_up_required",
+    "no_action_required",
 
+]
+CATEGORY_LABELS = [
+    "work",
+    "personal",
+    "newsletters",
+    "financial",
+    "travel",
+    "health",
+    "orders",
+    "events",
+    "notifications",
+    "spam_or_junk"
+]
 
 class Email:
     def __init__(self, sender: str, recipients: list[str], date: date, subject: str, msg_id: str, label_ids: list[str], text=None):
@@ -34,9 +51,7 @@ class Email:
         self.label_ids = label_ids
         self.text = text
 
-        for i in range(self.recipients):
-            if self.recipients[i] == user_email:
-                self.recipients[i] == 'me'
+        self.recipients = ['me' if r.strip() == user_email else r for r in self.recipients]
     
     def __str__(self):
         return (
@@ -96,6 +111,19 @@ def remove_email_label(email: Email, label_name: str):
         return
     email.label_ids.remove(label_id)
 
+def clear_all_labels(email: Email):
+    try:
+        gmail.users().messages().modify(
+            userId='me',
+            id=email.msg_id,
+            body={
+                'removeLabelIds': email.label_ids
+            }
+        ).execute()
+        email.label_ids = []  # Clear local copy too
+    except HttpError as error:
+        print(f"An error occurred while clearing labels: {error}")
+
 def create_label(label_name: str, color=None):
     label_body = {
         "name": label_name,
@@ -128,7 +156,7 @@ def _retrieve_email_from_id(gmail: Resource, id) -> Email:
 
     header_dict = {h['name']: h['value'] for h in headers}
 
-    email = Email(header_dict['From'], header_dict.get['To'].split(','), parser.parse(header_dict['Date']).date(),
+    email = Email(header_dict['From'], header_dict.get('To', '').split(','), parser.parse(header_dict['Date']).date(),
                   header_dict.get('Subject', None), id, msg_data.get('labelIds', []))
     
     if s := extract_email_text(payload):
@@ -215,7 +243,7 @@ def init_gmail(creds):
 
     gmail = build('gmail', 'v1', credentials=creds)
     user_email = gmail.users().getProfile(userId='me').execute()['emailAddress']
-    map_of_labels.update(get_all_label_ids())
+    ensure_required_labels(URGENCY_LABELS, CATEGORY_LABELS)
 
 def normalize_date(d: Union[date, str]) -> str:
     return d.strftime("%Y/%m/%d") if isinstance(d, date) else d
@@ -261,9 +289,46 @@ def extract_email_text(part):
                 return body
     return None
 
+def ensure_required_labels(urgency_labels, category_labels):
+    existing_labels = gmail.users().labels().list(userId='me').execute().get('labels', [])
+    existing_names = {label['name']: label['id'] for label in existing_labels}
+
+    # Create urgency labels with red color
+    for label in urgency_labels:
+        if label not in existing_names:
+            result = gmail.users().labels().create(
+                userId='me',
+                body={
+                    'name': label,
+                    'labelListVisibility': 'labelShow',
+                    'messageListVisibility': 'show',
+                    'color': {
+                        "backgroundColor": "#c04b37",  # Gmail red
+                        "textColor": "#000000"
+                    }
+                }
+            ).execute()
+            map_of_labels[label] = result['id']
+        else:
+            map_of_labels[label] = existing_names[label]
+
+    # Create category labels (default color)
+    for label in category_labels:
+        if label not in existing_names:
+            result = gmail.users().labels().create(
+                userId='me',
+                body={
+                    'name': label,
+                    'labelListVisibility': 'labelShow',
+                    'messageListVisibility': 'show'
+                }
+            ).execute()
+            map_of_labels[label] = result['id']
+        else:
+            map_of_labels[label] = existing_names[label]
 
 if __name__ == "__main__":
-    creds = get_creds("ArthurCreds", SCOPES)
+    creds = get_creds("Creds", SCOPES)
     init_gmail(creds)
     start_email_checking(creds, print_msg)
 
