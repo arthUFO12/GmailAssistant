@@ -3,7 +3,7 @@ import base64
 import re
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, date, timezone
 
 from pathlib import Path
 from typing import Union, Callable
@@ -248,8 +248,6 @@ def init_gmail(creds):
     user_email = gmail.users().getProfile(userId='me').execute()['emailAddress']
     ensure_required_labels(URGENCY_LABELS, CATEGORY_LABELS)
 
-from datetime import datetime, date
-from typing import Union
 
 def normalize_date(value: Union[datetime, date, str]) -> int:
     if isinstance(value, str):
@@ -260,6 +258,11 @@ def normalize_date(value: Union[datetime, date, str]) -> int:
         print(f"Converted date to datetime: {value}")
     elif isinstance(value, datetime):
         print(f"Received datetime directly: {value}")
+    
+    # Ensure datetime is treated as UTC
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+        print(f"Assuming naive datetime is UTC: {value}")
     
     timestamp = int(value.timestamp())
     print(f"Unix timestamp: {timestamp} (UTC seconds since epoch)")
