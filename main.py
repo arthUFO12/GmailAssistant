@@ -19,7 +19,7 @@ def _prompt_backlog_emails(date):
         print("No emails found for the specified date.")
 
 def _prompt_new_mail(email):
-    _prompt_llm([email])  # Process the new email with the LLM
+    _prompt_llm(email)  # Process the new email with the LLM
 
 
 def main():
