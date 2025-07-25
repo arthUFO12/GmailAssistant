@@ -2,3 +2,4 @@ Creds
 __pycache__
 .env
 .venv
+last_run.json

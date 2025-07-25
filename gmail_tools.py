@@ -3,6 +3,7 @@ import base64
 import re
 import threading
 import time
+from datetime import datetime
 
 from pathlib import Path
 from typing import Union, Callable
@@ -247,8 +248,22 @@ def init_gmail(creds):
     user_email = gmail.users().getProfile(userId='me').execute()['emailAddress']
     ensure_required_labels(URGENCY_LABELS, CATEGORY_LABELS)
 
-def normalize_date(d: Union[date, str]) -> str:
-    return d.strftime("%Y/%m/%d") if isinstance(d, date) else d
+from datetime import datetime, date
+from typing import Union
+
+def normalize_date(value: Union[datetime, date, str]) -> int:
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value)
+        print(f"Parsed ISO string to datetime: {value}")
+    elif isinstance(value, date) and not isinstance(value, datetime):
+        value = datetime.combine(value, datetime.min.time())
+        print(f"Converted date to datetime: {value}")
+    elif isinstance(value, datetime):
+        print(f"Received datetime directly: {value}")
+    
+    timestamp = int(value.timestamp())
+    print(f"Unix timestamp: {timestamp} (UTC seconds since epoch)")
+    return timestamp
 
 
 def query_inbox(start: Union[date, str] = None, end: Union[date,str] = None, 
