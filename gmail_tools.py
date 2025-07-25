@@ -26,7 +26,6 @@ URGENCY_LABELS = [
     "needs_reply",
     "follow_up_required",
     "no_action_required",
-
 ]
 CATEGORY_LABELS = [
     "work",
@@ -205,9 +204,12 @@ def _check_for_new_email(worker_gmail: Resource, func: Callable, *args):
         new_id = worker_gmail.users().getProfile(userId='me').execute()['historyId']
         if latest_id != new_id:
             if new_emails := _retrieve_new_emails(worker_gmail, latest_id):
-                func(*args)
+                func(new_emails, *args)
             latest_id = new_id
         print("checked email")
+        
+        
+
         
 def start_email_checking(creds, func: Callable, *args):
     worker_gmail = build('gmail', 'v1', credentials=creds)
