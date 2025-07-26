@@ -22,6 +22,7 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 gmail = None
 map_of_labels = {}
 user_email = None
+latest_id = None
 
 URGENCY_LABELS = [
     "needs_reply",
@@ -197,8 +198,10 @@ def _retrieve_new_emails(worker_gmail: Resource, history_id) -> list[Email]:
 
 
 def _check_for_new_email(worker_gmail: Resource, func: Callable, *args):
+    global latest_id
     
-    latest_id = worker_gmail.users().getProfile(userId='me').execute()['historyId']
+    if not latest_id:
+        latest_id = worker_gmail.users().getProfile(userId='me').execute()['historyId']
 
     while True:
         time.sleep(5.)
