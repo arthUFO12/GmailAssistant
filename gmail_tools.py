@@ -104,7 +104,7 @@ def _retrieve_email_from_id(gmail: Resource, id) -> Email:
 
     header_dict = {h['name']: h['value'] for h in headers}
 
-    email = Email(header_dict['From'], header_dict.get['To'].split(','), parser.parse(header_dict['Date']).date(),
+    email = Email(header_dict['From'], header_dict.get('To').split(','), parser.parse(header_dict['Date']).date(),
                   header_dict.get('Subject', None), id, msg_data.get('labelIds', []))
     
     if s := extract_email_text(payload):
@@ -154,9 +154,8 @@ def _check_for_new_email(worker_gmail: Resource, func: Callable, *args):
         new_id = worker_gmail.users().getProfile(userId='me').execute()['historyId']
         if latest_id != new_id:
             if new_emails := _retrieve_new_emails(worker_gmail, latest_id):
-                func(*args)
+                func(new_emails, *args)
             latest_id = new_id
-        print("checked email")
         
 def start_email_checking(creds, func: Callable, *args):
     worker_gmail = build('gmail', 'v1', credentials=creds)

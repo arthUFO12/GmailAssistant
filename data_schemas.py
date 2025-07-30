@@ -14,11 +14,10 @@ class Email:
         self.text = text
     
     def __str__(self):
-        return self.maker(sender=self.sender, 
-                        recipients=self.recipients, 
-                        date=self.date.strftime("%Y/%m/%d"), 
-                        subject=self.subject, 
-                        text=self.text)
+        return str({"sender": self.sender, 
+                    "sentOn": self.date.strftime("%d/%m/%Y"), 
+                    "subject": self.subject, 
+                    "text": self.text})
             
     
     def maker(**kwargs) -> str:

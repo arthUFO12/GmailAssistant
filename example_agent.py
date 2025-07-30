@@ -18,37 +18,39 @@ from IPython.display import Image, display
 
 
 
-from data_schemas import CreateEvent, CreateTask
+from data_schemas import CreateEvent, CreateTask, Email
 import calendar_tools
 
 os.environ['GOOGLE_API_KEY'] = json.load(open('ArthurCreds/gemini.json'))['key']
 
-SYSTEM_PROMPT = ("You are a helpful AI assistant responsible for managing a user's Gmail inbox and Google Calendar.\n\n"
-                "Your goal is to help the user efficiently respond to emails and manage events by using ONLY the tools provided to you. "
-                "You MUST call tools instead of making assumptions, especially when the information you need is available via a tool. "
-                "If a new email arrives that could involve checking calendar availability, scheduling a meeting, or replying to the sender, "
-                "ALWAYS use the appropriate tool before speaking to the user.\n\n"
-                "All tool outputs are direct responses from official Google Services APIs. Dates will be given in DD/MM/YYYY format. The user's time zone is \"America/New_York\".\n\n"
-                "Task:\n"
-                "- The user's inbox just received an email from their mom asking them to do the laundry at 4pm on 31/07/2025.\n"
-                "- Let the user know about the information contained in the email.\n"
-                "- Ask the user whether they’d like you to use any of the relevant tools available to you.\n"
-                "Scheduling Options:\n"
-                "- You can schedule one of two calendar items:\n"
-                "  1. An event. Used for obligations that have a definitive start or end time, e.g. a meeting, trip, or doctor's appointment.\n"
-                "  2. A task. Used for obligations that have a time they must be performed by or due time, e.g. getting groceries, sending an email response, or completing a homework assignment.\n"
-                "Goal: Schedule the appropriate calendar item unless the user tells you not to.\n"
-                "Rules:\n"
-                "- Give the user dates in \"(month name) (day)\" format.\n"
-                "- Continue to ask the user questions and perform actions until conflicts between events and tasks are resolved.\n"
-                "- Ensure you ask the user answers whether they want to schedule the event.\n"
-                "- Stop if there’s no logical next step.\n"
-                "- Only perform tasks the user or system explicitly tells you to.\n"
-                "- EXCEPTION: Before scheduling caledendar items check availability for it if you haven't already. If there are conflicts, ask the user what you should do.\n"
-                "- You may ONLY use PromptUser, GiveUserInfo, and ConfirmRequestCompletion to speak to the user.\n"
-                "- You may ONLY use PromptUser, GiveUserInfo, and ConfirmRequestCompletion in one response, all other tools must be called in different responses.\n")
 
+def make_system_prompt(inject: str):
+    return f"""You are a helpful AI assistant responsible for managing a user's Gmail inbox and Google Calendar.\n
+                Your goal is to help the user efficiently respond to emails and manage events by using ONLY the tools provided to you. 
+                You MUST call tools instead of making assumptions, especially when the information you need is available via a tool. 
+                If a new email arrives that could involve checking calendar availability, scheduling a meeting, or replying to the sender, 
+                ALWAYS use the appropriate tool before speaking to the user.\n
+                All tool outputs are direct responses from official Google Services APIs. Dates will be given in DD/MM/YYYY format. The user's time zone is \"America/New_York\".\n
+                Task:
+                - {inject}
+                - Let the user know about the information contained in the email.
+                - Ask the user whether they’d like you to use any of the relevant tools available to you.
+                Scheduling Options:
+                - You can schedule one of two calendar items:
+                  1. An event. Used for obligations that have a definitive start or end time, e.g. a meeting, trip, or doctor's appointment.
+                  2. A task. Used for obligations that have a time they must be performed by or due time, e.g. getting groceries, sending an email response, or completing a homework assignment.
+                Goal: Schedule the appropriate calendar item unless the user tells you not to.
+                Rules:
+                - Give the user dates in \"(month name) (day)\" format.
+                - Ask the user questions and perform actions until conflicts between events and tasks are resolved.
+                - Ensure you ask the user answers whether they want to schedule the event.
+                - Only perform tasks the user or system explicitly tells you to.
+                - You MUST check user availability before scheduling events AND tasks. If there are conflicts, ask the user what you should do.
+                - You may ONLY use PromptUser, GiveUserInfo, and ConfirmRequestCompletion to speak to the user.
+                - You may ONLY use `PromptUser`, `GiveUserInfo`, and `ConfirmRequestCompletion` in one response, all other tools must be called in different responses.
+                - After ConfirmRequestCompletion is called, send a `STOP` response."""
 
+system_prompt = None
 
 @tool
 @validate_call
@@ -110,8 +112,8 @@ Ensure you only ask the user to perform actions that are in your tools."""
 tools = [change_event_time, cancel_event, change_task_time, cancel_task, search_user_availability]
 tool_node = ToolNode(tools)
 
-model = ChatGoogleGenerativeAI(model='gemini-1.5-pro')
-model = model.bind_tools(tools + [PromptUser, GiveUserInfo, CreateEvent, CreateTask, ConfirmRequestCompletion])
+summarizer = ChatGoogleGenerativeAI(model='gemini-1.5-pro')
+model = summarizer.bind_tools(tools + [PromptUser, GiveUserInfo, CreateEvent, CreateTask, ConfirmRequestCompletion])
 
 def talk_to_user(state):
     last_message = state["messages"][-1]
@@ -128,7 +130,18 @@ def talk_to_user(state):
     
 
     return {"messages": state["messages"] + tool_responses}
-        
+
+def summarize(email): 
+    global system_prompt
+    prompt = f"""You are an email inbox summarizer. Your task is to supply the inbox manager with summaries of the most important details in incoming emails so they can extract the most pertinent information.
+Incoming email:
+{email}
+Summarize this email in 1 to 2 sentences. Include important information such as dates of tasks and events and descriptions of those tasks and events. Write all dates in DD/MM/YYYY format.
+Format the response as if you are speaking to the inbox manager. Start with, "The user's inbox received an email..."
+"""
+    response = summarizer.invoke(prompt)
+    system_prompt = make_system_prompt(response.content)
+
 def check_for_tool(message: BaseMessage, tool_name: str) -> dict:
     for i in message.tool_calls:
         if i["name"] == tool_name:
@@ -167,7 +180,7 @@ def call_model(state):
     i = -1
     while isinstance(messages[i], ToolMessage):
         i -= 1
-    messages.insert(i + 1, SystemMessage(content=SYSTEM_PROMPT))
+    messages.insert(i + 1, SystemMessage(content=system_prompt))
     
     response = model.invoke(messages)
     # We return a list, because this will get added to the existing list
@@ -246,29 +259,29 @@ workflow.add_edge("talk_to_user", "agent")
 workflow.add_edge("create_event", "agent")
 workflow.add_edge("create_task", "agent")
 
-memory = MemorySaver()
 
-app = workflow.compile(checkpointer=memory)
-with open("output.png", "wb") as f:
-    f.write(Image(app.get_graph().draw_mermaid_png()).data)
+
+app = workflow.compile()
+
 
 config = {"configurable": {"thread_id": "1"}}
 
+def start_agent(email):
+    summarize(email)
+    for event in app.stream(
+        {
+            "messages": [
+                {
+                    "role" : "human", 
+                    "content": "Help the user with the new message."
+                }
+            ]
+        },
+        config,
+        stream_mode="values"
+    ):
+        last = event["messages"][-1]
+        if isinstance(last, AIMessage) and not last.tool_calls:
+            for i in event["messages"]:
+                i.pretty_print()
 
-
-for event in app.stream(
-    {
-        "messages": [
-            {
-                "role" : "human", 
-                "content": "Help the user with the new message."
-            }
-        ]
-    },
-    config,
-    stream_mode="values",
-):
-    last = event["messages"][-1]
-    if isinstance(last, AIMessage) and not last.tool_calls:
-        for i in event["messages"]:
-            i.pretty_print()
