@@ -11,8 +11,6 @@ with open("ArthurCreds/gemini.json") as g:
     api_key = json.load(g)['key']
     genai.configure(api_key=api_key)
 
-model = genai.GenerativeModel("gemini-1.5-pro")
-
 def insert_prompts(list_of_emails, prompts):
     with gotten:
         prompts.extend(list_of_emails)

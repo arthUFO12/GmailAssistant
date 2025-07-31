@@ -34,32 +34,40 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify",
 
 def add_event(e: CreateEvent) -> str:
     global calendar
-    event_result = calendar.events().insert(
-        calendarId="primary",
-        body=e.model_dump(mode='json', exclude_none=True)
-    ).execute()
+
+    try:
+        event_result = calendar.events().insert(
+            calendarId="primary",
+            body=e.model_dump(mode='json', exclude_none=True)
+        ).execute()
+    except HttpError as error:
+        return f'An error occurred creating the event: {error}'
 
     return f'Event created with ID:\"{event_result['id']}\".'
 
 def add_task(t: CreateTask) -> str:
     global tasks
-    task_result = tasks.tasks().insert(
-        tasklist=default_tasklist,
-        body=t.model_dump(mode='json', exclude_none=True)
-    ).execute()
 
+    try:
+        task_result = tasks.tasks().insert(
+            tasklist=default_tasklist,
+            body=t.model_dump(mode='json', exclude_none=True)
+        ).execute()
+    excep
     return f'Task created with ID:\"{task_result['id']}\"'
 
 def reschedule_task(task_id: str, due: datetime) -> str:
-
     global tasks
-    task_result = tasks.tasks().patch(
-        tasklist=default_tasklist,
-        task=task_id,
-        body={
-            "due": eastern.localize(due).isoformat() if check_naivety(due) else due.isoformat()
-        }
-    ).execute()
+    try:
+        task_result = tasks.tasks().patch(
+            tasklist=default_tasklist,
+            task=task_id,
+            body={
+                "due": eastern.localize(due).isoformat() if check_naivety(due) else due.isoformat()
+            }
+        ).execute()
+    except HttpError as error:
+        return f'An error occurred rescheduling the task: {error}'
 
     return f'Task with ID \"{task_id}\" updated to be due at \"{due.isoformat()}\".'
 
@@ -67,10 +75,13 @@ def reschedule_task(task_id: str, due: datetime) -> str:
 def remove_task(task_id: str) -> str:
     global tasks
     
-    tasks.tasks().delete(
-        taskslist=default_tasklist,
-        task=task_id
-    ).execute()
+    try:
+        tasks.tasks().delete(
+            taskslist=default_tasklist,
+            task=task_id
+        ).execute()
+    except HttpError as error:
+        return f'An error occurred removing the task: {error}'
 
     return f'Task with ID \"{task_id}\" deleted.'
 
@@ -78,18 +89,24 @@ def check_naivety(dt: datetime):
     return dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None
     
 def reschedule_event(event_id: str, start: datetime, end: datetime) -> str:
-    calendar.events().patch(
-        calendarId="primary",
-        eventId=event_id,
-        body={
-            "start": {
-                "dateTime": eastern.localize(start).isoformat() if check_naivety(start) else start.isoformat()
-            },
-            "end": {
-                "dateTime": eastern.localize(end).isoformat() if check_naivety(end) else end.isoformat()
+    global calendar
+
+    try:
+        calendar.events().patch(
+            calendarId="primary",
+            eventId=event_id,
+            body={
+                "start": {
+                    "dateTime": eastern.localize(start).isoformat() if check_naivety(start) else start.isoformat()
+                },
+                "end": {
+                    "dateTime": eastern.localize(end).isoformat() if check_naivety(end) else end.isoformat()
+                }
             }
-        }
-    ).execute()
+        ).execute()
+    except HttpError as error:
+        return f'An error occurred rescheduling the event: {error}'
+
     return f'Event with ID \"{event_id}\" updated to start at \"{start.isoformat()}\" and end at \"{end.isoformat()}\".'
 
 def remove_event(event_id: str):
@@ -117,12 +134,17 @@ def init_tasks(creds):
 
 def get_events_in_range(start: datetime, end: datetime) -> str:
     global calendar
-    events_result = calendar.events().list(
-        calendarId='primary', timeMin=eastern.localize(start).isoformat() if check_naivety(start) else start.isoformat(),
-        timeMax=eastern.localize(end).isoformat() if check_naivety(end) else end.isoformat(),
-        maxResults=20, singleEvents=True,
-        orderBy='startTime'
-    ).execute()
+
+    try:
+        events_result = calendar.events().list(
+            calendarId='primary', timeMin=eastern.localize(start).isoformat() if check_naivety(start) else start.isoformat(),
+            timeMax=eastern.localize(end).isoformat() if check_naivety(end) else end.isoformat(),
+            maxResults=20, singleEvents=True,
+            orderBy='startTime'
+        ).execute()
+    except HttpError as error:
+        return f'An error occurred retrieving events: {error}'
+
     events = events_result.get('items', [])
 
     event_list = []
@@ -135,11 +157,12 @@ def get_events_in_range(start: datetime, end: datetime) -> str:
             "description": e['description'][:30] if 'description' in e else None,
             "location": e.get('location', None),
             "recurrence": e.get('recurrence', None),
-            "reminders": e.get('reminders', None)
+            "reminders": e.get('reminders', None),
+            "attendees": e.get('attendees', None)
         }
 
-        if 'attendees' in e and len(e['attendees']) < 5:
-            data["attendees"] = e['attendees']
+        if data['attendees'] and len(data['attendees']) > 5:
+            del data['attendees']
 
         cleaned_data = {k: v for k, v in data.items() if v is not None}
         event_list.append(cleaned_data)
@@ -149,17 +172,24 @@ def get_events_in_range(start: datetime, end: datetime) -> str:
 
 def get_tasks_in_range(start: datetime, end: datetime) -> str:
     global tasks
-    results = tasks.tasklists().list(maxResults=10).execute()
+
+    try:
+        results = tasks.tasklists().list(maxResults=10).execute()
+    except HttpError as error:
+        return f'An error occurred retrieving tasks: {error}'
     tasklists = results.get('items', [])
 
     tasks_in_range = []
     for tasklist in tasklists:
-        tasks_results = tasks.tasks().list(
-            tasklist=tasklist['id'],
-            showCompleted=False,
-            showDeleted=False,
-            maxResults=10
-        ).execute()
+        try:
+            tasks_results = tasks.tasks().list(
+                tasklist=tasklist['id'],
+                showCompleted=False,
+                showDeleted=False,
+                maxResults=10
+            ).execute()
+        except HttpError as error:
+            return f'An error occurred retrieving tasks: {error}'
 
         items = tasks_results.get('items', [])
         
