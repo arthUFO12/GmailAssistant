@@ -26,24 +26,25 @@ calendar = None
 tasks = None
 default_tasklist = None
 time_zone = None
-eastern = pytz.timezone("America/New_York")
+
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify",
         "https://www.googleapis.com/auth/calendar",
         "https://www.googleapis.com/auth/tasks"]
 
-def add_event(e: CreateEvent) -> str:
-    global calendar
 
-    try:
-        event_result = calendar.events().insert(
-            calendarId="primary",
-            body=e.model_dump(mode='json', exclude_none=True)
-        ).execute()
-    except HttpError as error:
-        return f'An error occurred creating the event: {error}'
+def init_tasks(creds):
+    global tasks, default_tasklist
+    tasks = build('tasks', 'v1', credentials=creds)
+    tasklists = tasks.tasklists().list().execute().get('items', [])
+    if tasklists: default_tasklist = tasklists[0]['id']
 
-    return f'Event created with ID:\"{event_result['id']}\".'
+def init_calendar(creds):
+    global calendar, time_zone
+    calendar = build('calendar', 'v3', credentials=creds)
+    tz = calendar.calendarList().get(calendarId='primary').execute()
+    time_zone = pytz.timezone(tz['timeZone'])
+
 
 def add_task(t: CreateTask) -> str:
     global tasks
@@ -53,7 +54,9 @@ def add_task(t: CreateTask) -> str:
             tasklist=default_tasklist,
             body=t.model_dump(mode='json', exclude_none=True)
         ).execute()
-    excep
+    except HttpError as error:
+        return f'An error occurred creating the task: {error}'
+
     return f'Task created with ID:\"{task_result['id']}\"'
 
 def reschedule_task(task_id: str, due: datetime) -> str:
@@ -63,7 +66,7 @@ def reschedule_task(task_id: str, due: datetime) -> str:
             tasklist=default_tasklist,
             task=task_id,
             body={
-                "due": eastern.localize(due).isoformat() if check_naivety(due) else due.isoformat()
+                "due": time_zone.localize(due).isoformat() if is_naive(due) else due.isoformat()
             }
         ).execute()
     except HttpError as error:
@@ -85,9 +88,20 @@ def remove_task(task_id: str) -> str:
 
     return f'Task with ID \"{task_id}\" deleted.'
 
-def check_naivety(dt: datetime):
-    return dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None
-    
+
+def add_event(e: CreateEvent) -> str:
+    global calendar
+
+    try:
+        event_result = calendar.events().insert(
+            calendarId="primary",
+            body=e.model_dump(mode='json', exclude_none=True)
+        ).execute()
+    except HttpError as error:
+        return f'An error occurred creating the event: {error}'
+
+    return f'Event created with ID:\"{event_result['id']}\".'
+
 def reschedule_event(event_id: str, start: datetime, end: datetime) -> str:
     global calendar
 
@@ -97,10 +111,10 @@ def reschedule_event(event_id: str, start: datetime, end: datetime) -> str:
             eventId=event_id,
             body={
                 "start": {
-                    "dateTime": eastern.localize(start).isoformat() if check_naivety(start) else start.isoformat()
+                    "dateTime": time_zone.localize(start).isoformat() if is_naive(start) else start.isoformat()
                 },
                 "end": {
-                    "dateTime": eastern.localize(end).isoformat() if check_naivety(end) else end.isoformat()
+                    "dateTime": time_zone.localize(end).isoformat() if is_naive(end) else end.isoformat()
                 }
             }
         ).execute()
@@ -112,33 +126,28 @@ def reschedule_event(event_id: str, start: datetime, end: datetime) -> str:
 def remove_event(event_id: str):
     global calendar
     
-    calendar.events().delete(
-        calendarId='primary',
-        eventId=event_id
-    ).execute()
+    try:
+        calendar.events().delete(
+            calendarId='primary',
+            eventId=event_id
+        ).execute()
+    except HttpError as error:
+        return f'An error occurred removing the event: {error}'
 
     return f'Event with ID \"{event_id}\" deleted.'
 
-def init_calendar(creds):
-    global calendar, time_zone
-    calendar = build('calendar', 'v3', credentials=creds)
-    tz = calendar.calendarList().get(calendarId='primary').execute()
-    time_zone = tz['timeZone']
 
-def init_tasks(creds):
-    global tasks, default_tasklist
-    tasks = build('tasks', 'v1', credentials=creds)
-    tasklists = tasks.tasklists().list().execute().get('items', [])
-    if tasklists: default_tasklist = tasklists[0]['id']
 
+def is_naive(dt: datetime):
+    return dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None
 
 def get_events_in_range(start: datetime, end: datetime) -> str:
     global calendar
 
     try:
         events_result = calendar.events().list(
-            calendarId='primary', timeMin=eastern.localize(start).isoformat() if check_naivety(start) else start.isoformat(),
-            timeMax=eastern.localize(end).isoformat() if check_naivety(end) else end.isoformat(),
+            calendarId='primary', timeMin=time_zone.localize(start).isoformat() if is_naive(start) else start.isoformat(),
+            timeMax=time_zone.localize(end).isoformat() if is_naive(end) else end.isoformat(),
             maxResults=20, singleEvents=True,
             orderBy='startTime'
         ).execute()
@@ -196,7 +205,7 @@ def get_tasks_in_range(start: datetime, end: datetime) -> str:
         for task in items:
             time = datetime.fromisoformat(task['due']).replace(tzinfo=None)
             
-            time = eastern.localize(time)
+            time = time_zone.localize(time)
             
             if start <= time <= end:
                 tasks_in_range.append(task)
