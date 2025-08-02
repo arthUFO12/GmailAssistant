@@ -26,7 +26,7 @@ calendar = None
 tasks = None
 default_tasklist = None
 time_zone = None
-
+date = None
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify",
         "https://www.googleapis.com/auth/calendar",
@@ -40,10 +40,11 @@ def init_tasks(creds):
     if tasklists: default_tasklist = tasklists[0]['id']
 
 def init_calendar(creds):
-    global calendar, time_zone
+    global calendar, time_zone, date
     calendar = build('calendar', 'v3', credentials=creds)
     tz = calendar.calendarList().get(calendarId='primary').execute()
     time_zone = pytz.timezone(tz['timeZone'])
+    date = datetime.now(time_zone).date()
 
 
 def add_task(t: CreateTask) -> str:

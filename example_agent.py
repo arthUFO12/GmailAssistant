@@ -25,30 +25,31 @@ os.environ['GOOGLE_API_KEY'] = json.load(open('ArthurCreds/gemini.json'))['key']
 
 
 def make_system_prompt(inject: str):
-    return f"""You are a helpful AI assistant responsible for managing a user's Gmail inbox and Google Calendar.\n
-                Your goal is to help the user efficiently respond to emails and manage events by using ONLY the tools provided to you. 
-                You MUST call tools instead of making assumptions, especially when the information you need is available via a tool. 
-                If a new email arrives that could involve checking calendar availability, scheduling a meeting, or replying to the sender, 
-                ALWAYS use the appropriate tool before speaking to the user.\n
-                All tool outputs are direct responses from official Google Services APIs. Dates will be given in DD/MM/YYYY format. The user's time zone is \"America/New_York\".\n
-                Task:
-                - {inject}
-                - Let the user know about the information contained in the email.
-                - Ask the user whether they’d like you to use any of the relevant tools available to you.
-                Scheduling Options:
-                - You can schedule one of two calendar items:
-                  1. An event. Used for obligations that have a definitive start or end time, e.g. a meeting, trip, or doctor's appointment.
-                  2. A task. Used for obligations that have a time they must be performed by or due time, e.g. getting groceries, sending an email response, or completing a homework assignment.
-                Goal: Schedule the appropriate calendar item unless the user tells you not to.
-                Rules:
-                - Give the user dates in \"(month name) (day)\" format.
-                - Ask the user questions and perform actions until conflicts between events and tasks are resolved.
-                - Ensure you ask the user answers whether they want to schedule the event.
-                - Only perform tasks the user or system explicitly tells you to.
-                - You MUST check user availability before scheduling events AND tasks. If there are conflicts, ask the user what you should do.
-                - You may ONLY use PromptUser, GiveUserInfo, and ConfirmRequestCompletion to speak to the user.
-                - You may ONLY use `PromptUser`, `GiveUserInfo`, and `ConfirmRequestCompletion` in one response, all other tools must be called in different responses.
-                - After ConfirmRequestCompletion is called, send a `STOP` response."""
+    return f"""You are a helpful AI assistant responsible for managing a user's Gmail inbox and Google Calendar.
+Your goal is to help the user efficiently respond to emails and manage events by using ONLY the tools provided to you. 
+You should think step by step and decide when to use tools to take action. Ensure you reason in every response.
+Respond in this format:
+
+Thought: [Your reasoning]
+Action: [The structured tool call JSON objects]
+Task:
+{inject}
+1. Let the user know about the information contained in the email.
+2. Ask the user whether they’d like you to use any of the relevant tools available to you.
+3. Complete any tasks that the user requests from you.
+Info:
+- The date is {calendar_tools.date.strftime("%d/%m/%Y")}.
+- The timezone is {calendar_tools.time_zone.zone}.
+Rules:
+- You can schedule one of two calendar items:
+    1. An event. Used for obligations that have a definitive start or end time, e.g. a meeting, trip, or doctor's appointment.
+    2. A task. Used for obligations that have a time they must be performed by or due time, e.g. getting groceries, sending an email response, or completing a homework assignment.
+- Dates will be given to you in DD/MM/YYYY format.
+- You MUST check user availability before scheduling events AND tasks. If there are conflicts, ask the user what you should do.
+- Ensure you only schedule tasks the user wants you to.
+- You may ONLY use `PromptUser`, `GiveUserInfo`, and `ConfirmRequestCompletion` to speak to the user.
+- You may ONLY use `PromptUser`, `GiveUserInfo`, and `ConfirmRequestCompletion` in one response, all other tools must be called in different responses.
+- After `ConfirmRequestCompletion` is called, send a `STOP` response."""
 
 system_prompt = None
 
@@ -58,7 +59,8 @@ def search_user_availability(
         start: datetime = Field(..., description="Start of date of the search range in ISO 8601 format."), 
         end: datetime = Field(..., description="End of date of the search range in ISO 8601 format.")
     ):
-    """Call this to check the user's availability between a certain range of times.\n Event object important fields:\n 1. summary - name of the event.\n 2. start - start time and timezone of the event.\n 3. end - end time and timezone of the event."""
+    """Use this to check the user's availability.
+Instructions: Enter the start and end times to search. You will receive a list of event objects back.\n Event object important fields:\n 1. summary - name of the event.\n 2. start - start time and timezone of the event.\n 3. end - end time and timezone of the event."""
     return calendar_tools.get_events_in_range(start,end) + calendar_tools.get_tasks_in_range(start,end)
 
 @tool
@@ -68,7 +70,8 @@ def change_event_time(
         start: datetime = Field(..., description="The new start time of the event in ISO 8601 format."),
         end: datetime = Field(..., description="The new end time of the event in ISO 8601 format.")
     ):
-    """Call this to change the time of an event you have the Google Services API provided ID for. If you don't have it, first search for the event using search_user_availability and obtain the ID from the tool."""
+    """Use this to reschedule an event.
+Instructions: Enter the Google Services API provided ID. If you don't have it, first search for the event using search_user_availability and obtain the ID from the tool."""
     return calendar_tools.reschedule_event(event_id, start, end)
 
 @tool
@@ -76,16 +79,18 @@ def change_event_time(
 def cancel_event(
         event_id: str = Field(..., description="ID of the event provided by Google.")
     ):
-    """Call this tool to delete an event you have the Google Services API provided ID for. If you don't have it, first search for the event using search_user_availability and obtain the ID from the tool."""
+    """Use this tool to delete an event.
+Instructions:  Enter the Google Service API provided ID. If you don't have it, first search for the event using search_user_availability and obtain the ID from the tool."""
     return calendar_tools.remove_event(event_id)
 
 @tool
 @validate_call
 def change_task_time(
-        task_id: str = Field(..., decription="ID of the task provided by Google."),
+        task_id: str = Field(..., description="ID of the task provided by Google."),
         due: datetime = Field(..., description="The new due time of the event in ISO 8601 format.")
     ):
-    """Call this to change the time of a task you have the Google Services API provided ID for. If you don't have it, first search for the task using search_user_availability and obtain the ID from the tool."""
+    """Use this tool to change the time of a task.
+Instructions: Enter the Google Services API provided ID of the task you want to reschedule along with the new due time. If you don't have it, first search for the task using search_user_availability and obtain the ID from the tool."""
     return calendar_tools.reschedule_task(task_id, due)
 
 @tool
@@ -93,19 +98,23 @@ def change_task_time(
 def cancel_task(
         task_id: str = Field(..., description="ID of the task provided by Google.")
     ):
-    """Call this tool to delete a task you have the Google Services API provided ID for. If you don't have it, first search for the task using search_user_availability and obtain the ID from the tool."""
+    """Use this tool to delete a task.
+Instructions: Enter Google Services API provided ID for the task you want to cancel. If you don't have it, first search for the task using search_user_availability and obtain the ID from the tool."""
     return calendar_tools.remove_task(task_id)
 
 class ConfirmRequestCompletion(BaseModel):
-    """Send the user a message indicating their request was completed. Purpose is to confirm a user requested task was completed. DO NOT ask follow-up questions. After using this tool, stop."""
+    """Use this to send the user a message indicating their request was completed. 
+Instructions: After completing all of the user's requests, send a confirmation message to them using this tool. DO NOT ask follow-up questions."""
     message: str
+
 class GiveUserInfo(BaseModel):
-    """Send the user useful information. The information should not contain questions. If you want to give the user a follow-up question, it is common to first call GiveUserInfo and then PromptUser in succession."""
+    """Use this to send the user useful information. 
+Instructions: Enter a string containing the information you want to give to the user. This string should not contain questions. If you want to give the user information and then a follow-up question, call GiveUserInfo and then PromptUser in succession."""
     info: str
 
 class PromptUser(BaseModel):
-    """Prompt the user with a question. Purpose is to ask the user for pertinent information and tasks for the assistant to perform.
-Ensure you only ask the user to perform actions that are in your tools."""
+    """Use this to receive user input. 
+Instructions: Enter a question to receive input from the user."""
     prompt: str
 
 
@@ -142,6 +151,7 @@ Format the response as if you are speaking to the inbox manager. Start with, "Th
     response = summarizer.invoke(prompt)
     system_prompt = make_system_prompt(response.content)
 
+
 def check_for_tool(message: BaseMessage, tool_name: str) -> dict:
     for i in message.tool_calls:
         if i["name"] == tool_name:
@@ -177,10 +187,6 @@ def should_continue(state):
 def call_model(state):
     messages = state["messages"]
 
-    i = -1
-    while isinstance(messages[i], ToolMessage):
-        i -= 1
-    messages.insert(i + 1, SystemMessage(content=system_prompt))
     
     response = model.invoke(messages)
     # We return a list, because this will get added to the existing list
@@ -271,6 +277,7 @@ def start_agent(email):
     for event in app.stream(
         {
             "messages": [
+                SystemMessage(content=system_prompt),
                 {
                     "role" : "human", 
                     "content": "Help the user with the new message."

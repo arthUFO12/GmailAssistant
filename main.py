@@ -18,6 +18,7 @@ def insert_prompts(list_of_emails, prompts):
 
 creds = gmail_tools.get_creds("ArthurCreds", gmail_tools.SCOPES)
 gmail_tools.start_email_checking(creds, insert_prompts, prompts)
+print("Listening for emails...\nYour assistant will notify you when you receive one.")
 
 while True:
     while not prompts:

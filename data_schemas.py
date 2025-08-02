@@ -50,7 +50,8 @@ class RemindersAttribute(BaseModel):
     overrides: list[RemindersAttributeMethod] = Field(None, description= "A list of methods to override the user's default settings. Must be provided if use_default is false.")
 
 class CreateEvent(BaseModel):
-    """Call this to create an event in the user's primary calendar. The summary, start, and end are required fields. Use any fields that are provided to you."""
+    """Use this tool create an event in the user's primary calendar. 
+Notes: The summary, start, and end are required fields. Use any fields that are provided to you."""
     start: TimeAttribute = Field(..., description= "The start date or datetime of the event.")
     end: TimeAttribute = Field(..., description= "The end date or datetime of the event. End dates are exclusive.")
     summary: str = Field(..., description= "A fitting name for the event.")
@@ -67,6 +68,8 @@ class LinkAttribute(BaseModel):
     link: str = Field(..., description= "URL for the link.")
 
 class CreateTask(BaseModel):
+    """Use this tool create a tool in the user's primary tasklist. 
+Notes: The title is a required field. Use any fields that are provided to you."""
     due: datetime = Field(None, description= "The RFC 3339 timestamp of when the task is due.")
     title: str = Field(..., description= "A fitting title for the task.")
     notes: str = Field(None, description= "Notes or description for the task.")
