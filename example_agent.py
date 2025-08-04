@@ -27,21 +27,19 @@ Respond in this format:
 
 Thought: [Your reasoning]
 Action: [The structured tool call JSON objects]
+
 Task:
+The user has received an email. Here is a structured breakdown of the contents.
 {inject}
-1. Let the user know about the information contained in the email.
+1. Let the user know about the information contained in the email in 1 to 2 sentences.
 2. Ask the user whether they’d like you to use any of the relevant tools available to you.
 3. Complete any tasks that the user requests from you.
 Info:
-- The date is {calendar_tools.date.strftime("%d/%m/%Y")}.
+- The date is {calendar_tools.today.strftime("%d/%m/%Y")}.
 - The timezone is {calendar_tools.time_zone.zone}.
 Rules:
-- You can schedule one of two calendar items:
-    1. An event. Used for obligations that have a definitive start or end time, e.g. a meeting, trip, or doctor's appointment.
-    2. A task. Used for obligations that have a time they must be performed by or due time, e.g. getting groceries, sending an email response, or completing a homework assignment.
-- Dates will be given to you in DD/MM/YYYY format.
-- You MUST check user availability before scheduling events AND tasks. If there are conflicts, ask the user what you should do.
-- Ensure you only schedule tasks the user wants you to.
+- Datetimes will be given to you in ISO8601 format, but give these dates to the user in [month name] [day] format with the time specified in AM or PM.
+- You MUST check user availability before scheduling events AND tasks. If there are conflicts, ask the user what you should do. Ensure the user wants to schedule the event.
 - You may ONLY use `PromptUser`, `GiveUserInfo`, and `ConfirmRequestCompletion` to speak to the user.
 - You may ONLY use `PromptUser`, `GiveUserInfo`, and `ConfirmRequestCompletion` in one response, all other tools must be called in different responses.
 - After `ConfirmRequestCompletion` is called, send a `STOP` response."""
@@ -137,11 +135,21 @@ def talk_to_user(state):
 
 def summarize(email): 
     global system_prompt
-    prompt = f"""You are an email inbox summarizer. Your task is to supply the inbox manager with summaries of the most important details in incoming emails so they can extract the most pertinent information.
+    prompt = f"""You are an email inbox summarizer. Your task is to supply the inbox manager with structured summary of the most pertinent information contained in incoming emails.
+The response should contain the following fields:
+
+- "type": Can be "event", "task", or "null".
+    ~ "event" is used if the email contains obligations that have a definitive start or end time, e.g. a meeting, trip, or doctor's appointment.
+    ~ "task" is used if the email contains obligations that have a time they must be performed by, e.g. getting groceries or completing a homework assignment.
+    ~ "null" is used if the email contains information doesn't fit into either of the previous categories. If the summary type is null, do not enter any other fields.
+- "description": A general overview that captures the content of the obligation.
+- "time": A string specifying the date and time of the obligation. Dates should be in ISO8601 format. 
+- "notes": Any extra details that might be useful for the inbox manager to know.
+
 Incoming email:
 {email}
-Summarize this email in 1 to 2 sentences. Include important information such as dates of tasks and events and descriptions of those tasks and events. Write all dates in DD/MM/YYYY format.
-Format the response as if you are speaking to the inbox manager. Start with, "The user's inbox received an email..."
+
+Produce a structured summary of the email containing the above fields. Respond in JSON.
 """
     response = summarizer.invoke(prompt)
     system_prompt = make_system_prompt(response.content)
