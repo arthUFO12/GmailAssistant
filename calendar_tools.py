@@ -22,11 +22,11 @@ from googleapiclient.discovery import build, Resource
 from googleapiclient.errors import HttpError
 from data_schemas import CreateTask, CreateEvent
 
-calendar = None
-tasks = None
+g_cal = None
+g_tasks = None
 default_tasklist = None
 time_zone = None
-date = None
+today = None
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify",
         "https://www.googleapis.com/auth/calendar",
@@ -34,36 +34,37 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify",
 
 
 def init_tasks(creds):
-    global tasks, default_tasklist
-    tasks = build('tasks', 'v1', credentials=creds)
-    tasklists = tasks.tasklists().list().execute().get('items', [])
+    global g_tasks, default_tasklist
+    g_tasks = build('tasks', 'v1', credentials=creds)
+    tasklists = g_tasks.tasklists().list().execute().get('items', [])
     if tasklists: default_tasklist = tasklists[0]['id']
 
 def init_calendar(creds):
-    global calendar, time_zone, date
-    calendar = build('calendar', 'v3', credentials=creds)
-    tz = calendar.calendarList().get(calendarId='primary').execute()
+    global g_cal, time_zone, today
+    g_cal = build('calendar', 'v3', credentials=creds)
+    tz = g_cal.calendarList().get(calendarId='primary').execute()
     time_zone = pytz.timezone(tz['timeZone'])
-    date = datetime.now(time_zone).date()
+    today = datetime.now(time_zone).date()
 
 
 def add_task(t: CreateTask) -> str:
-    global tasks
+    global g_tasks
 
     try:
-        task_result = tasks.tasks().insert(
+        task_result = g_tasks.tasks().insert(
             tasklist=default_tasklist,
             body=t.model_dump(mode='json', exclude_none=True)
         ).execute()
     except HttpError as error:
-        return f'An error occurred creating the task: {error}'
+        return f"An error occurred creating the task: {error}"
 
-    return f'Task created with ID:\"{task_result['id']}\"'
+    return f"Task created with ID: '{task_result['id']}'"
 
 def reschedule_task(task_id: str, due: datetime) -> str:
-    global tasks
+    global g_tasks
+
     try:
-        task_result = tasks.tasks().patch(
+        task_result = g_tasks.tasks().patch(
             tasklist=default_tasklist,
             task=task_id,
             body={
@@ -71,43 +72,43 @@ def reschedule_task(task_id: str, due: datetime) -> str:
             }
         ).execute()
     except HttpError as error:
-        return f'An error occurred rescheduling the task: {error}'
+        return f"An error occurred rescheduling the task: {error}"
 
-    return f'Task with ID \"{task_id}\" updated to be due at \"{due.isoformat()}\".'
+    return f"Task with ID '{task_id}' updated to be due at {due.isoformat()}."
 
 
 def remove_task(task_id: str) -> str:
-    global tasks
+    global g_tasks
     
     try:
-        tasks.tasks().delete(
+        g_tasks.tasks().delete(
             taskslist=default_tasklist,
             task=task_id
         ).execute()
     except HttpError as error:
-        return f'An error occurred removing the task: {error}'
+        return f"An error occurred removing the task: {error}"
 
-    return f'Task with ID \"{task_id}\" deleted.'
+    return f"Task with ID '{task_id}' deleted."
 
 
 def add_event(e: CreateEvent) -> str:
-    global calendar
+    global g_cal
 
     try:
-        event_result = calendar.events().insert(
+        event_result = g_cal.events().insert(
             calendarId="primary",
             body=e.model_dump(mode='json', exclude_none=True)
         ).execute()
     except HttpError as error:
-        return f'An error occurred creating the event: {error}'
+        return f"An error occurred creating the event: {error}"
 
-    return f'Event created with ID:\"{event_result['id']}\".'
+    return f"Event created with ID: '{event_result['id']}'."
 
 def reschedule_event(event_id: str, start: datetime, end: datetime) -> str:
-    global calendar
+    global g_cal
 
     try:
-        calendar.events().patch(
+        g_cal.events().patch(
             calendarId="primary",
             eventId=event_id,
             body={
@@ -120,22 +121,22 @@ def reschedule_event(event_id: str, start: datetime, end: datetime) -> str:
             }
         ).execute()
     except HttpError as error:
-        return f'An error occurred rescheduling the event: {error}'
+        return f"An error occurred rescheduling the event: {error}"
 
-    return f'Event with ID \"{event_id}\" updated to start at \"{start.isoformat()}\" and end at \"{end.isoformat()}\".'
+    return f"Event with ID '{event_id}' updated to start at {start.isoformat()} and end at {end.isoformat()}."
 
 def remove_event(event_id: str):
-    global calendar
+    global g_cal
     
     try:
-        calendar.events().delete(
+        g_cal.events().delete(
             calendarId='primary',
             eventId=event_id
         ).execute()
     except HttpError as error:
-        return f'An error occurred removing the event: {error}'
+        return f"An error occurred removing the event: {error}"
 
-    return f'Event with ID \"{event_id}\" deleted.'
+    return f"Event with ID '{event_id}' deleted."
 
 
 
@@ -143,17 +144,17 @@ def is_naive(dt: datetime):
     return dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None
 
 def get_events_in_range(start: datetime, end: datetime) -> str:
-    global calendar
+    global g_cal
 
     try:
-        events_result = calendar.events().list(
+        events_result = g_cal.events().list(
             calendarId='primary', timeMin=time_zone.localize(start).isoformat() if is_naive(start) else start.isoformat(),
             timeMax=time_zone.localize(end).isoformat() if is_naive(end) else end.isoformat(),
             maxResults=20, singleEvents=True,
             orderBy='startTime'
         ).execute()
     except HttpError as error:
-        return f'An error occurred retrieving events: {error}'
+        return f"An error occurred retrieving events: {error}"
 
     events = events_result.get('items', [])
 
@@ -181,10 +182,10 @@ def get_events_in_range(start: datetime, end: datetime) -> str:
 
 
 def get_tasks_in_range(start: datetime, end: datetime) -> str:
-    global tasks
+    global g_tasks
 
     try:
-        results = tasks.tasklists().list(maxResults=10).execute()
+        results = g_tasks.tasklists().list(maxResults=10).execute()
     except HttpError as error:
         return f'An error occurred retrieving tasks: {error}'
     tasklists = results.get('items', [])
@@ -192,7 +193,7 @@ def get_tasks_in_range(start: datetime, end: datetime) -> str:
     tasks_in_range = []
     for tasklist in tasklists:
         try:
-            tasks_results = tasks.tasks().list(
+            tasks_results = g_tasks.tasks().list(
                 tasklist=tasklist['id'],
                 showCompleted=False,
                 showDeleted=False,
@@ -204,11 +205,11 @@ def get_tasks_in_range(start: datetime, end: datetime) -> str:
         items = tasks_results.get('items', [])
         
         for task in items:
-            time = datetime.fromisoformat(task['due']).replace(tzinfo=None)
+            due_time = datetime.fromisoformat(task['due']).replace(tzinfo=None)
             
-            time = time_zone.localize(time)
+            due_time = time_zone.localize(due_time)
             
-            if start <= time <= end:
+            if start <= due_time <= end:
                 tasks_in_range.append(task)
 
     return "JSON list of tasks in this range:\n" + json.dumps(tasks_in_range, indent=4) + "\n"

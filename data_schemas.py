@@ -3,6 +3,7 @@ from datetime import datetime, date, timezone, timedelta
 
 eastern = timezone(timedelta(hours=-4))
 from typing import Union
+
 class Email:
     def __init__(self, sender: str, recipients: list[str], date: date, subject: str, msg_id: str, label_ids: list[str], text=None):
         self.sender = sender
