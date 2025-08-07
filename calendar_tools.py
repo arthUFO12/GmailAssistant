@@ -44,7 +44,7 @@ def init_calendar(creds):
     g_cal = build('calendar', 'v3', credentials=creds)
     tz = g_cal.calendarList().get(calendarId='primary').execute()
     time_zone = pytz.timezone(tz['timeZone'])
-    today = datetime.now(time_zone).date()
+    today = datetime.now(time_zone)
 
 
 def add_task(t: CreateTask) -> str:

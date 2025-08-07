@@ -19,7 +19,7 @@ import calendar_tools
 os.environ['GOOGLE_API_KEY'] = json.load(open('ArthurCreds/gemini.json'))['key']
 
 
-def make_system_prompt(inject: str):
+def make_email_prompt(inject: str):
     return f"""You are a helpful AI assistant responsible for managing a user's Gmail inbox and Google Calendar.
 Your goal is to help the user efficiently respond to emails and manage events by using ONLY the tools provided to you. 
 You should think step by step and decide when to use tools to take action. Ensure you reason in every response.
@@ -30,21 +30,53 @@ Action: [The structured tool call JSON objects]
 
 Task:
 The user has received an email. Here is a structured breakdown of the contents.
+
 {inject}
+
 1. Let the user know about the information contained in the email in 1 to 2 sentences.
 2. Ask the user whether they’d like you to use any of the relevant tools available to you.
 3. Complete any tasks that the user requests from you.
+
 Info:
-- The date is {calendar_tools.today.strftime("%d/%m/%Y")}.
+- The date is {calendar_tools.today.isoformat()}.
 - The timezone is {calendar_tools.time_zone.zone}.
+
 Rules:
 - Datetimes will be given to you in ISO8601 format, but give these dates to the user in [month name] [day] format with the time specified in AM or PM.
 - You MUST check user availability before scheduling events AND tasks. If there are conflicts, ask the user what you should do. Ensure the user wants to schedule the event.
-- You may ONLY use `PromptUser`, `GiveUserInfo`, and `ConfirmRequestCompletion` to speak to the user.
+- You may ONLY use the `PromptUser`, `GiveUserInfo`, and `ConfirmRequestCompletion` tools to speak to the user.
 - You may ONLY use `PromptUser`, `GiveUserInfo`, and `ConfirmRequestCompletion` in one response, all other tools must be called in different responses.
 - After `ConfirmRequestCompletion` is called, send a `STOP` response."""
 
-system_prompt = None
+
+def make_conversation_prompt():
+    return f"""You are a helpful AI assistant responsible for managing a user's Gmail inbox and Google Calendar.
+Your goal is to help the user efficiently respond to emails and manage events by using ONLY the tools provided to you. 
+You should think step by step and decide when to use tools to take action. Ensure you reason in every response.
+Respond in this format:
+
+Thought: [Your reasoning]
+Action: [The structured tool call JSON objects]
+
+Task:
+The user has opened a chat conversation with you.
+
+1. Ask the user what they would like you to do.
+2. Complete their request if it can be performed using any of your tools. If not, inform the user and STOP.
+3. Ask the user if they need anything else, and if not, STOP.
+
+Info:
+- The date is {calendar_tools.today.isoformat()}.
+- The timezone is {calendar_tools.time_zone.zone}.
+
+Rules:
+- Give dates to the user in [month name] [day] format.
+- You MUST check user availability before scheduling events AND tasks. If there are conflicts, ask the user what you should do. Ensure the user wants to schedule the event.
+- You may ONLY use the `PromptUser`, `GiveUserInfo`, and `ConfirmRequestCompletion` tools to speak to the user.
+- You may ONLY use `PromptUser`, `GiveUserInfo`, and `ConfirmRequestCompletion` in one response, all other tools must be called in different responses.
+- After `ConfirmRequestCompletion` is called, send a `STOP` response."""
+
+
 
 @tool
 @validate_call
@@ -133,8 +165,7 @@ def talk_to_user(state):
 
     return {"messages": state["messages"] + tool_responses}
 
-def summarize(email): 
-    global system_prompt
+def summarize(email) -> str: 
     prompt = f"""You are an email inbox summarizer. Your task is to supply the inbox manager with structured summary of the most pertinent information contained in incoming emails.
 The response should contain the following fields:
 
@@ -152,7 +183,8 @@ Incoming email:
 Produce a structured summary of the email containing the above fields. Respond in JSON.
 """
     response = summarizer.invoke(prompt)
-    system_prompt = make_system_prompt(response.content)
+    
+    return response.content
 
 
 def check_for_tool(message: BaseMessage, tool_name: str) -> dict:
@@ -276,11 +308,10 @@ app = workflow.compile()
 config = {"configurable": {"thread_id": "1"}}
 
 def start_agent(email):
-    summarize(email)
     for event in app.stream(
         {
             "messages": [
-                SystemMessage(content=system_prompt),
+                SystemMessage(content=make_email_prompt(summarize(email))),
                 {
                     "role" : "human", 
                     "content": "Help the user with the new message."
@@ -295,3 +326,22 @@ def start_agent(email):
             for i in event["messages"]:
                 i.pretty_print()
 
+
+def start_conversation_agent():
+    for event in app.stream(
+        {
+            "messages": [
+                SystemMessage(content=make_conversation_prompt()),
+                {
+                    "role" : "human", 
+                    "content": "Begin the conversation with the user."
+                }
+            ]
+        },
+        config,
+        stream_mode="values"
+    ):
+        last = event["messages"][-1]
+        if isinstance(last, AIMessage) and not last.tool_calls:
+            for i in event["messages"]:
+                i.pretty_print()

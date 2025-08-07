@@ -4,28 +4,44 @@ import google.generativeai as genai
 import json
 import threading
 
+
 prompts = []
-gotten = threading.Condition()
+notifier = threading.Condition()
 
 with open("ArthurCreds/gemini.json") as g:
     api_key = json.load(g)['key']
     genai.configure(api_key=api_key)
 
 def insert_prompts(list_of_emails, prompts):
-    with gotten:
+    with notifier:
         prompts.extend(list_of_emails)
-        gotten.notify()
+        notifier.notify()
+
+def prompt_chat() -> bool:
+
+    while True:
+        response = input("Open new chat? ")
+        if response == 'y':
+            return True
+        elif response == 'n':
+            return False
+        else:
+            print("Answer with a 'y' or 'n'. ")
+
+
 
 creds = gmail_tools.get_creds("ArthurCreds", gmail_tools.SCOPES)
 gmail_tools.start_email_checking(creds, insert_prompts, prompts)
-print("Listening for emails...\nYour assistant will notify you when you receive one.")
+
+print("Welcome to the Gmail Assistant app.")
 
 while True:
-    while not prompts:
-        with gotten:
-            gotten.wait()
-
-    example_agent.start_agent(prompts.pop(0))
+    if prompt_chat():
+        example_agent.start_conversation_agent()
+    
+    with notifier:
+        notifier.wait()
+        example_agent.start_agent(prompts.pop(0))
 
 
 

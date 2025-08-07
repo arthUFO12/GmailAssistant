@@ -3,7 +3,7 @@ from datetime import datetime, date, timezone, timedelta
 
 eastern = timezone(timedelta(hours=-4))
 from typing import Union
-
+import json
 class Email:
     def __init__(self, sender: str, recipients: list[str], date: date, subject: str, msg_id: str, label_ids: list[str], text=None):
         self.sender = sender
@@ -15,7 +15,7 @@ class Email:
         self.text = text
     
     def __str__(self):
-        return str({"sender": self.sender, 
+        return json.dumps({"sender": self.sender, 
                     "sentOn": self.date.strftime("%d/%m/%Y"), 
                     "subject": self.subject, 
                     "text": self.text})
