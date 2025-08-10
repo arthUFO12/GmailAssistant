@@ -1,0 +1,12 @@
+python-dateutil
+pydantic
+pytz
+iso8601
+google-api-python-client
+google-auth
+google-auth-oauthlib
+google-generativeai
+langchain-google-genai
+langchain-core
+langgraph
+pynput

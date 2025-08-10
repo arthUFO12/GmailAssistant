@@ -359,10 +359,14 @@ app = workflow.compile()
 config = {"configurable": {"thread_id": "1"}}
 
 def start_new_email_agent(email):
+    summary = json.loads(summarize_new(email))
+    if summary['type'] is None:
+        return
+    
     for event in app.stream(
         {
             "messages": [
-                SystemMessage(content=make_email_prompt(summarize_new(email))),
+                SystemMessage(content=make_email_prompt(json.dumps(summary, indent=2))),
                 {
                     "role" : "human", 
                     "content": "Help the user with the new message."

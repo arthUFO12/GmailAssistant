@@ -129,7 +129,6 @@ def remove_event(event_id: str):
     return f"Event with ID '{event_id}' deleted."
 
 
-
 def is_naive(dt: datetime):
     return dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None
 

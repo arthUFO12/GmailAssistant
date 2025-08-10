@@ -1,9 +1,10 @@
 from pydantic import BaseModel, Field
 from datetime import datetime, date, timezone, timedelta
 
-eastern = timezone(timedelta(hours=-4))
 from typing import Union
 import json
+
+
 class Email:
     def __init__(self, sender: str, recipients: list[str], date: date, subject: str, msg_id: str, label_ids: list[str], text=None):
         self.sender = sender
@@ -39,7 +40,7 @@ class TimeAttribute(BaseModel):
 
     class Config:
         json_encoders = {
-            datetime: lambda v: v.astimezone(eastern).isoformat()
+            datetime: lambda v: v.isoformat()
         }
 
 class RemindersAttributeMethod(BaseModel):
@@ -80,5 +81,5 @@ Notes: The title is a required field. Use any fields that are provided to you.""
 
     class Config:
         json_encoders = {
-            datetime: lambda v: v.astimezone(eastern).isoformat()
+            datetime: lambda v: v.isoformat()
         }
