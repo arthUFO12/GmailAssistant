@@ -1,12 +1,9 @@
-import os.path
 import base64
 import re
 import threading
 import time
 import json
 
-from pathlib import Path
-from typing import Union, Callable
 from datetime import date, datetime
 from urllib.parse import urlparse
 from dateutil import parser
@@ -14,10 +11,8 @@ from pydantic import BaseModel
 
 import pytz
 import iso8601
+import utils
 
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build, Resource
 from googleapiclient.errors import HttpError
 from data_schemas import CreateTask, CreateEvent
@@ -27,11 +22,6 @@ g_tasks = None
 default_tasklist = None
 time_zone = None
 today = None
-
-SCOPES = ["https://www.googleapis.com/auth/gmail.modify",
-        "https://www.googleapis.com/auth/calendar",
-        "https://www.googleapis.com/auth/tasks"]
-
 
 def init_tasks(creds):
     global g_tasks, default_tasklist
@@ -214,31 +204,7 @@ def get_tasks_in_range(start: datetime, end: datetime) -> str:
 
     return "JSON list of tasks in this range:\n" + json.dumps(tasks_in_range, indent=4) + "\n"
 
-def get_creds(creds_dir: Union[Path, str], scopes: list[str]):
-    creds = None
 
-    creds_json = os.path.join(creds_dir, "credentials.json")
-    token_json = os.path.join(creds_dir, "token.json")
-
-    if os.path.exists(token_json):
-        creds = Credentials.from_authorized_user_file(token_json, scopes)
-    
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                creds_json, scopes
-            )
-
-            creds = flow.run_local_server(port=0)
-
-        with open(token_json, "w") as token:
-            token.write(creds.to_json())
-
-    return creds
-
-creds = get_creds("ArthurCreds", SCOPES)
-init_calendar(creds)
-init_tasks(creds)
+init_calendar(utils.creds)
+init_tasks(utils.creds)
 
