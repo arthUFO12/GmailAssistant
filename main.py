@@ -3,6 +3,7 @@ import agent
 import google.generativeai as genai
 import json
 import threading
+import utils
 from pynput import mouse
 
 new_emails = []
@@ -16,7 +17,9 @@ def insert_emails(list_of_emails):
         notifier.notify()
 
 def mouse_listener():
+
     def on_click(x, y, button, pressed):
+        global end
         if pressed:
             if button == mouse.Button.right:
                 end = True
@@ -27,9 +30,11 @@ def mouse_listener():
     with mouse.Listener(on_click=on_click) as listener:
         listener.join()
 
-agent.start_backlog_agent(gmail_tools.get_backlogged_emails())
+if backlog := gmail_tools.get_backlogged_emails():
+    agent.start_backlog_agent(backlog)
 
 gmail_tools.start_email_checking(utils.creds, insert_emails)
+threading.Thread(target=mouse_listener, daemon=True).start()
 
 while True:
     with notifier:

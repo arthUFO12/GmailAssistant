@@ -2,7 +2,7 @@
 # Gmail Assistant instructions
 
 To start run the assistant...
-1. Clone the repo from github.
+1. Clone the repo from github. Make sure you are on the 'accessible-branch' using `git status` in the terminal . If not use `git switch accessible-branch`
 2. Email 'arth.ufongene@gmail.com' the gmail account for the inbox you would like to use. Might take a while to respond and give you access to the app.
 3. You will receive an invite to the google cloud project. Accept it, and use this linkg to take you to the project: https://console.cloud.google.com/apis/dashboard?hl=en&inv=1&invt=Ab5IYA&project=starry-diode-464720-n0
 4. Navigate to APIs and Services using the navigation menu (Three lines top left) and then to credentials which will be on the sidebar.
@@ -17,6 +17,12 @@ To start run the assistant...
 6. Create a virtual environment using in your `python -m venv myenv` and activate it using `source myenv/bin/activate`
 7. Run `pip install -r requirements.txt`
 8. Run `python main.py`
+9. You will have to sign into the correct google account and probably enable your IDE to monitor input.
 
 ## What the assistant does right now
 As of now, the assistant can only monitor incoming emails and make changes in the user's calendar. The agent is proactive, meaning it will notify you of new emails and ask you what action you would like to take. It can check your availability, schedule tasks or event, reschedule, or delete them.
+
+On start, your assistant will give you a summary of emails you received since it last ran.
+To open a conversation left click your mouse.
+As you receive emails while the program is running, the assistant will notify you.
+Right click to close the program.
