@@ -362,7 +362,8 @@ def start_new_email_agent(email):
     summary = json.loads(summarize_new(email))
     if summary['type'] is None:
         return
-    
+
+    print("------------- NEW CHAT -------------")
     for event in app.stream(
         {
             "messages": [
@@ -377,9 +378,11 @@ def start_new_email_agent(email):
         stream_mode="values"
     ):
         pass
+    print("------------ END OF CHAT ------------")
 
 
 def start_conversation_agent():
+    print("------------- NEW CHAT -------------")
     for event in app.stream(
         {
             "messages": [
@@ -394,9 +397,11 @@ def start_conversation_agent():
         stream_mode="values"
     ):
         pass
+    print("------------ END OF CHAT ------------")
 
 
 def start_backlog_agent(emails: list[Email]):
+    print("------------- NEW CHAT -------------")
     for event in app.stream(
         {
             "messages": [
@@ -411,3 +416,5 @@ def start_backlog_agent(emails: list[Email]):
         stream_mode="values"
     ):
         pass
+    print("------------ END OF CHAT ------------")
+    
