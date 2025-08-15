@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from datetime import datetime, date, timezone, timedelta
 
-eastern = timezone(timedelta(hours=-4))
+
 from typing import Union
 import json
 class Email:

@@ -101,7 +101,7 @@ def _retrieve_email_from_id(gmail: Resource, id) -> Email:
 
     header_dict = {h['name']: h['value'] for h in headers}
 
-    email = Email(header_dict['From'], header_dict.get('To').split(','), parser.parse(header_dict['Date']).date(),
+    email = Email(header_dict['From'], header_dict['To'].split(',') if 'To' in header_dict else None, parser.parse(header_dict['Date']).date(),
                   header_dict.get('Subject', None), id, msg_data.get('labelIds', []))
     
     if s := extract_email_text(payload):
@@ -174,7 +174,7 @@ def normalize_date(d: Union[date, str]) -> str:
 
 
 def query_inbox(start: Union[date, str] = None, end: Union[date,str] = None, 
-                sender: str = None, max_results: int = 100) -> list[Email]:
+                sender: str = None, max_results: int = 100) -> tuple[list[Email],list[str]]:
     
     start_query = '' if start is None else f'after:{normalize_date(start)} '
     end_query = '' if end is None else f'before:{normalize_date(end)} '
@@ -185,15 +185,15 @@ def query_inbox(start: Union[date, str] = None, end: Union[date,str] = None,
     results = gmail.users().messages().list(userId='me', q=query, maxResults=max_results).execute()
 
     messages = results.get('messages', [])
-
+    msgs = [msg['id'] for msg in messages]
 
     query_results = []
 
-    for msg in messages:
-        email = _retrieve_email_from_id(gmail, msg['id'])
+    for msg in msgs:
+        email = _retrieve_email_from_id(gmail, msg)
         query_results.append(email)
 
-    return query_results
+    return query_results, msgs
 
 def strip_urls(text: str) -> str:
     return re.sub(r'https?://[^\s]+',replace_helper, text)
