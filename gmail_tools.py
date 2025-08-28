@@ -15,17 +15,26 @@ from googleapiclient.discovery import build, Resource
 from googleapiclient.errors import HttpError
 
 gmail = None
-map_of_labels = {}
+label_descriptors = utils.get_json_field('config.json', 'user_labels')
+map_of_labels = { label['name']: label['id'] for label in label_descriptors }
 user_email = None
 
 
-def get_all_label_ids():
+def check_label_ids():
     response = gmail.users().labels().list(userId='me').execute()
     labels = response.get('labels', [])
     
-    label_map = {label['name']: label['id'] for label in labels}
-    
-    return label_map
+    label_set = set([label['name'] for label in labels])
+    for k in map_of_labels:
+        if k not in label_set:
+            id = create_label(k)
+            print(id)
+            map_of_labels[k] = id
+            for i in range(len(label_descriptors)):
+                if label_descriptors[i]['name'] == k:
+                    label_descriptors[i]['id'] = id
+
+    utils.update_json('config.json', 'user_labels', label_descriptors)
 
 
 def add_email_label(email: Email, label_name: str):
@@ -78,8 +87,9 @@ def create_label(label_name: str, color=None):
         ).execute()
     except HttpError as error:
         print(f'An error occurred: {error}')
+        return
 
-    return label
+    return label['id']
 
 def get_backlogged_emails() -> list[Email]:
     global gmail
@@ -105,7 +115,7 @@ def _retrieve_email_from_id(gmail: Resource, id) -> Email:
                   header_dict.get('Subject', None), id, msg_data.get('labelIds', []))
     
     if s := extract_email_text(payload):
-        body = strip_urls(s).strip()
+        body = strip_urls(strip_html(s)).strip()
         email.text = re.sub(r'\n+', '\n', body)
     else:
         email.text = None
@@ -167,7 +177,7 @@ def init_gmail(creds):
 
     gmail = build('gmail', 'v1', credentials=creds)
     user_email = gmail.users().getProfile(userId='me').execute()['emailAddress']
-    map_of_labels.update(get_all_label_ids())
+    check_label_ids()
 
 def normalize_date(d: Union[date, str]) -> str:
     return d.strftime("%Y/%m/%d") if isinstance(d, date) else d
@@ -197,6 +207,13 @@ def query_inbox(start: Union[date, str] = None, end: Union[date,str] = None,
 
 def strip_urls(text: str) -> str:
     return re.sub(r'https?://[^\s]+',replace_helper, text)
+
+def strip_html(html: str) -> str:
+    newline_tags = r'</?(p|div|br|li|ul|ol|tr|h[1-6])[^>]*>'
+    text = re.sub(newline_tags, '\n', html, flags=re.IGNORECASE)
+    text = re.sub(r'<[^>]+>', '', text)
+
+    return text
 
 def replace_helper(match: re.Match) -> str:
     url = match.group()

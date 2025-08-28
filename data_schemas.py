@@ -1,9 +1,12 @@
 from pydantic import BaseModel, Field
 from datetime import datetime, date, timezone, timedelta
-
+from zoneinfo import ZoneInfo
 
 from typing import Union
 import json
+
+eastern = ZoneInfo("America/New_York")
+
 class Email:
     def __init__(self, sender: str, recipients: list[str], date: date, subject: str, msg_id: str, label_ids: list[str], text=None):
         self.sender = sender
@@ -70,7 +73,8 @@ class LinkAttribute(BaseModel):
 
 class CreateTask(BaseModel):
     """Use this tool create a tool in the user's primary tasklist. 
-Notes: The title is a required field. Use any fields that are provided to you."""
+    Notes: The title is a required field. Use any fields that are provided to you.
+    """
     due: datetime = Field(None, description= "The RFC 3339 timestamp of when the task is due.")
     title: str = Field(..., description= "A fitting title for the task.")
     notes: str = Field(None, description= "Notes or description for the task.")
