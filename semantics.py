@@ -1,5 +1,4 @@
 from data_schemas import Email
-from vertexai.language_models import TextEmbeddingModel
 
 import numpy as np
 import faiss
