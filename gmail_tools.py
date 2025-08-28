@@ -1,45 +1,40 @@
-import os.path
 import base64
 import re
 import threading
 import time
 
 from data_schemas import Email
+import utils
 
-from pathlib import Path
-from typing import Union, Callable
+from typing import Callable, Union
 from datetime import date
 from urllib.parse import urlparse
 from dateutil import parser
 
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build, Resource
 from googleapiclient.errors import HttpError
 
-
-SCOPES = ["https://www.googleapis.com/auth/gmail.modify",
-        "https://www.googleapis.com/auth/calendar",
-        "https://www.googleapis.com/auth/tasks"]
-
 gmail = None
-map_of_labels = {}
+label_descriptors = utils.get_json_field('config.json', 'user_labels')
+map_of_labels = { label['name']: label['id'] for label in label_descriptors }
 user_email = None
 
 
-# Scopes needed for now
-
-def get_all_label_ids():
+def check_label_ids():
     response = gmail.users().labels().list(userId='me').execute()
     labels = response.get('labels', [])
     
-    label_map = {label['name']: label['id'] for label in labels}
-    
-    return label_map
-    
-def print_msg():
-    print("mail's here")
+    label_set = set([label['name'] for label in labels])
+    for k in map_of_labels:
+        if k not in label_set:
+            id = create_label(k)
+            print(id)
+            map_of_labels[k] = id
+            for i in range(len(label_descriptors)):
+                if label_descriptors[i]['name'] == k:
+                    label_descriptors[i]['id'] = id
+
+    utils.update_json('config.json', 'user_labels', label_descriptors)
 
 
 def add_email_label(email: Email, label_name: str):
@@ -92,8 +87,20 @@ def create_label(label_name: str, color=None):
         ).execute()
     except HttpError as error:
         print(f'An error occurred: {error}')
+        return
 
-    return label
+    return label['id']
+
+def get_backlogged_emails() -> list[Email]:
+    global gmail
+
+    if id := utils.get_json_field('config.json', 'history_id'):
+        new_emails = _retrieve_new_emails(gmail, id)
+        utils.update_json('config.json', 'history_id', gmail.users().getProfile(userId='me').execute()['historyId'])
+        return new_emails
+        
+    return []
+
 
 def _retrieve_email_from_id(gmail: Resource, id) -> Email:
 
@@ -104,11 +111,11 @@ def _retrieve_email_from_id(gmail: Resource, id) -> Email:
 
     header_dict = {h['name']: h['value'] for h in headers}
 
-    email = Email(header_dict['From'], header_dict.get('To').split(','), parser.parse(header_dict['Date']).date(),
+    email = Email(header_dict['From'], header_dict['To'].split(',') if 'To' in header_dict else None, parser.parse(header_dict['Date']).date(),
                   header_dict.get('Subject', None), id, msg_data.get('labelIds', []))
     
     if s := extract_email_text(payload):
-        body = strip_urls(s).strip()
+        body = strip_urls(strip_html(s)).strip()
         email.text = re.sub(r'\n+', '\n', body)
     else:
         email.text = None
@@ -156,49 +163,28 @@ def _check_for_new_email(worker_gmail: Resource, func: Callable, *args):
             if new_emails := _retrieve_new_emails(worker_gmail, latest_id):
                 func(new_emails, *args)
             latest_id = new_id
+            utils.update_json('config.json', 'history_id', latest_id)
+            
         
 def start_email_checking(creds, func: Callable, *args):
     worker_gmail = build('gmail', 'v1', credentials=creds)
-    thread = threading.Thread(target=_check_for_new_email, daemon=False, args=(worker_gmail, func, *args))
+    thread = threading.Thread(target=_check_for_new_email, daemon=True, args=(worker_gmail, func, *args))
     thread.start()
 
-def get_creds(creds_dir: Union[Path, str], scopes: list[str]):
-    creds = None
-
-    creds_json = os.path.join(creds_dir, "credentials.json")
-    token_json = os.path.join(creds_dir, "token.json")
-
-    if os.path.exists(token_json):
-        creds = Credentials.from_authorized_user_file(token_json, scopes)
-    
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                creds_json, scopes
-            )
-
-            creds = flow.run_local_server(port=0)
-
-        with open(token_json, "w") as token:
-            token.write(creds.to_json())
-
-    return creds
     
 def init_gmail(creds):
-    global gmail, user_email
+    global gmail, user_email, map_of_labels
 
     gmail = build('gmail', 'v1', credentials=creds)
     user_email = gmail.users().getProfile(userId='me').execute()['emailAddress']
-    map_of_labels.update(get_all_label_ids())
+    check_label_ids()
 
 def normalize_date(d: Union[date, str]) -> str:
     return d.strftime("%Y/%m/%d") if isinstance(d, date) else d
 
 
 def query_inbox(start: Union[date, str] = None, end: Union[date,str] = None, 
-                sender: str = None, max_results: int = 100) -> list[Email]:
+                sender: str = None, max_results: int = 100) -> tuple[list[Email],list[str]]:
     
     start_query = '' if start is None else f'after:{normalize_date(start)} '
     end_query = '' if end is None else f'before:{normalize_date(end)} '
@@ -209,18 +195,25 @@ def query_inbox(start: Union[date, str] = None, end: Union[date,str] = None,
     results = gmail.users().messages().list(userId='me', q=query, maxResults=max_results).execute()
 
     messages = results.get('messages', [])
-
+    msgs = [msg['id'] for msg in messages]
 
     query_results = []
 
-    for msg in messages:
-        email = _retrieve_email_from_id(gmail, msg['id'])
+    for msg in msgs:
+        email = _retrieve_email_from_id(gmail, msg)
         query_results.append(email)
 
-    return query_results
+    return query_results, msgs
 
 def strip_urls(text: str) -> str:
     return re.sub(r'https?://[^\s]+',replace_helper, text)
+
+def strip_html(html: str) -> str:
+    newline_tags = r'</?(p|div|br|li|ul|ol|tr|h[1-6])[^>]*>'
+    text = re.sub(newline_tags, '\n', html, flags=re.IGNORECASE)
+    text = re.sub(r'<[^>]+>', '', text)
+
+    return text
 
 def replace_helper(match: re.Match) -> str:
     url = match.group()
@@ -238,9 +231,7 @@ def extract_email_text(part):
     return None
 
 
-
-creds = get_creds("ArthurCreds", SCOPES)
-init_gmail(creds)
+init_gmail(utils.creds)
   
 
 

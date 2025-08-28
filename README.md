@@ -1,5 +1,16 @@
 ## Gmail Assistant
 
+### Module Descriptions
+1. `data_schemas.py` - BaseModel definitions for events, tasks, etc.
+2. `calendar_agent.py` - Contains the workflow and tooling for the agent that manages the user's calendar.
+3. `chatbot.py` - Contains the workflow for a chatbot that communicates with the user and gives requests to the two different agents.
+4. `classification.py` - Contains logic for classifying emails into the user's labels.
+5. `semantics.py` - Contains logic for embedding email meaning and querying those embeddings for the closest match. Supports index saving and loading.
+6. `workflow.py` - Will soon contain the entire workflow for handling incoming emails
+7. `utils.py` - Miscellaneous functions
+8. `agent.py` - deprecated
+
+
 ### Problems to Solve
 1. Gmail inboxes don't have categories for emails that might require a reply or action, and sometimes you may forget to reply to an email or perform an action specified in an email.
 2. Many Gmail inboxes aren't checked for long periods of times, or receive large volumes of emails in short amounts of times that are difficult to navigate.
@@ -25,10 +36,11 @@ The user will be able to ask information that might be contained in the inbox si
 The assistant will also be connected to the user's google calendar and will be able to check availability. The user will be able to ask for their availability, and if there are possible conflicts the assistant will list them. The assistant will also be able to create and delete events on user request.
 
 ### Implementation
-#### Tech Stack
+#### Tech Stack/ Modules Needed
 1. Google API services and authorization - To handle logging into services and retrieving emails and google calendar evemts.
 2. Google Gemini LLM - To handle tasks such as creating labels, filters, and summarizing text.
-3. LangChain - To handle the thinking aspects of the assistant, i.e. figuring out which functions to call based on user request.
+3. LangChain and LangGraph - To handle the thinking aspects of the assistant, i.e. figuring out which functions to call based on user request.
+4. Pydantic - For JSON validation of event objects and descriptions of tool arguments.
 
 #### Labeling Implementation Steps
 1. Create a gmail tools module that contains functions that can retrieve emails from google APIs and organize them into Email objects.
