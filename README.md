@@ -1,6 +1,6 @@
 ## Gmail Assistant
 
-Visit accessible-branch to demo the assistant yourself.
+Visit accessible-branch to demo a previous version of the assistant yourself.
 
 ### Module Descriptions
 1. `data_schemas.py` - BaseModel definitions for events, tasks, etc.
