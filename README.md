@@ -1,5 +1,7 @@
 ## Gmail Assistant
 
+Visit accessible-branch to demo the assistant yourself.
+
 ### Module Descriptions
 1. `data_schemas.py` - BaseModel definitions for events, tasks, etc.
 2. `calendar_agent.py` - Contains the workflow and tooling for the agent that manages the user's calendar.
