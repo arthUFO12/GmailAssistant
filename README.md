@@ -1,14 +1,14 @@
 ## Gmail Assistant
 
 ### Module Descriptions
-`data_schemas.py` - BaseModel definitions for events, tasks, etc.
-`calendar_agent.py` - Contains the workflow and tooling for the agent that manages the user's calendar.
-`chatbot.py` - Contains the workflow for a chatbot that communicates with the user and gives requests to the two different agents.
-`classification.py` - Contains logic for classifying emails into the user's labels.
-`semantics.py` - Contains logic for embedding email meaning and querying those embeddings for the closest match. Supports index saving and loading.
-`workflow.py` - Will soon contain the entire workflow for handling incoming emails
-`utils.py` - Miscellaneous functions
-`agent.py` - deprecated
+1. `data_schemas.py` - BaseModel definitions for events, tasks, etc.
+2. `calendar_agent.py` - Contains the workflow and tooling for the agent that manages the user's calendar.
+3. `chatbot.py` - Contains the workflow for a chatbot that communicates with the user and gives requests to the two different agents.
+4. `classification.py` - Contains logic for classifying emails into the user's labels.
+5. `semantics.py` - Contains logic for embedding email meaning and querying those embeddings for the closest match. Supports index saving and loading.
+6. `workflow.py` - Will soon contain the entire workflow for handling incoming emails
+7. `utils.py` - Miscellaneous functions
+8. `agent.py` - deprecated
 
 
 ### Problems to Solve
