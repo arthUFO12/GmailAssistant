@@ -7,27 +7,34 @@ import json
 
 eastern = ZoneInfo("America/New_York")
 
-class Email:
-    def __init__(self, sender: str, recipients: list[str], date: date, subject: str, msg_id: str, label_ids: list[str], text=None):
-        self.sender = sender
-        self.recipients = recipients
-        self.date = date
-        self.subject = subject
-        self.msg_id = msg_id
-        self.label_ids = label_ids
-        self.text = text
+from datetime import date
+from pydantic import BaseModel
+
+class Email(BaseModel):
+    sender: str = Field(...)
+    recipients: list[str] = Field(None, exclude=True)
+    sentOn: date = Field(...)
+    subject: str = Field(None)
+    email_id: str = Field(...)
+    label_names: list[str] = Field(...)
+    text: str = Field(None)
+
+
+    def to_dict(self):
+        return {
+            "sender": self.sender,
+            "sentOn": self.sentOn.strftime("%Y/%m/%d"),
+            "subject": self.subject,
+            "email_id": self.email_id,
+            "label_names": self.label_names,
+            "text": self.text
+        }
     
-    def __str__(self):
-        return json.dumps({"sender": self.sender, 
-                    "sentOn": self.date.strftime("%d/%m/%Y"), 
-                    "subject": self.subject, 
-                    "text": self.text})
-            
-    
-    def maker(**kwargs) -> str:
-        return str(kwargs)
-    def __repr__(self):
-        return str(self)
+    class Config:
+        exclude_none = True
+        json_encoders = {
+            date: lambda v: v.strftime("%Y/%m/%d")
+        }
 
 
 class Attendee(BaseModel):

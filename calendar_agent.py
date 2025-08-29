@@ -24,7 +24,7 @@ import utils
 
 os.environ["GOOGLE_API_KEY"] = utils.get_json_field('config.json', 'gemini_key')
 
-SYSTEM_PROMPT = """You are a helpful AI agent responsible for managing a user's Google Calendar.
+SYSTEM_PROMPT = f"""You are a helpful AI agent responsible for managing a user's Google Calendar.
 An AI chatbot is talking to the user and will relay requests to you in order to help the user. Your goal is to fulfill chatbot's requests using ONLY the tools provided to you. 
 You should think step by step and decide when to use tools to take action. Ensure you reason in every response.
 Respond in this format:
@@ -33,7 +33,7 @@ Thought: [Your reasoning]
 Action: [The structured tool call JSON objects]
 
 INFO:
-Today's date is August 26th, 2025
+Today's date is {calendar_tools.today}
 
 RULES:
 - If a request is vague ask for more information.
@@ -51,7 +51,12 @@ def search_user_availability(
     ):
     """Use this to check the user's availability.
 Instructions: Enter the start and end times to search. You will receive a list of event objects back.\n Event object important fields:\n 1. summary - name of the event.\n 2. start - start time and timezone of the event.\n 3. end - end time and timezone of the event."""
-    return json.dumps({"events": calendar_tools.get_events_in_range(start,end), "tasks": calendar_tools.get_tasks_in_range(start,end)}, indent=2)
+    return json.dumps({
+        "status": "success",
+        "summary": "fetched events and tasks in specified range",
+        "events": calendar_tools.get_events_in_range(start,end), 
+        "tasks": calendar_tools.get_tasks_in_range(start,end)
+    }, indent=2)
 
 @tool
 @validate_call
