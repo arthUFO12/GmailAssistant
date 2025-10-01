@@ -22,19 +22,7 @@ ids_to_names = { v: k for k, v in map_of_labels.items()}
 user_email = None
 
 
-def remove_invisible_chars(text: str) -> str:
-    # Matches zero-width joiner, zero-width non-joiner, non-breaking space, etc.
-    invisible_chars = [
-        '\u034f',  # combining grapheme joiner
-        '\u200b',  # zero-width space
-        '\u200c',  # zero-width non-joiner
-        '\u200d',  # zero-width joiner
-        '\u2060',  # word joiner
-        '\ufeff',  # BOM
-        '\u00a0',  # non-breaking space
-    ]
-    pattern = "[" + "".join(invisible_chars) + "]"
-    return re.sub(pattern, "", text)
+
 
 def check_label_ids():
     response = gmail.users().labels().list(userId='me').execute()
@@ -147,7 +135,7 @@ def _retrieve_email_from_id(gmail: Resource, id) -> Email:
     email_args = {
         "sender": header_dict['From'],
         "recipients": header_dict['To'].split(',') if 'To' in header_dict else [],
-        "sentOn": parser.parse(header_dict['Date']).date(),
+        "sentOn": parser.parse(header_dict['Date']).date() if 'Date' in header_dict else date.today(),
         "subject": header_dict.get('Subject', None),
         "email_id": id,
         "label_names": [ids_to_names[l_id] for l_id in msg_data.get('labelIds', []) if l_id in ids_to_names],
@@ -156,7 +144,15 @@ def _retrieve_email_from_id(gmail: Resource, id) -> Email:
     email = Email.model_validate(email_args)
     
     if s := extract_email_text(payload):
-        body = strip_urls(remove_invisible_chars(unicodedata.normalize("NFKC",s))).strip()
+        body = strip_whitespace(
+          strip_html(
+            strip_urls(
+              strip_invisible_chars(
+                unicodedata.normalize("NFKC",s)
+              )
+            )
+          )
+        ).strip()
         email.text = re.sub(r'\n+', '\n', body)
     else:
         email.text = "null"
@@ -229,10 +225,9 @@ def keyword_query_inbox(keywords: str, subject: str = None, start: date = None, 
     start_query = '' if start is None else f'after:{start.strftime("%Y/%m/%d")} '
     end_query = '' if end is None else f'before:{end.strftime("%Y/%m/%d")} '
     sender_query = '' if sender is None else f'from:{sender} '
-    query = keywords + ' ' + subject_query + start_query + end_query + sender_query
-
+    query = keywords + ' ' + subject_query + sender_query + start_query + end_query 
     
-    results = gmail.users().messages().list(userId='me', q=query, maxResults=3).execute()
+    results = gmail.users().messages().list(userId='me', q=query, maxResults=5).execute()
 
     messages = results.get('messages', [])
     msgs = [msg['id'] for msg in messages]
@@ -246,15 +241,16 @@ def keyword_query_inbox(keywords: str, subject: str = None, start: date = None, 
     return json.dumps({
         "status": "success",
         "result": "fetched query matching emails",
-        "emails": query_results
+        "emails" : query_results
     }, indent=2)
+    
 
 def semantically_query_inbox(query: str, start: date = None, end: date = None) -> dict:
 
     email_ids = semantics.query_index(query, 5)
     seen = set()
     i = 0
- 
+
     while i < len(email_ids):
         if email_ids[i] in seen:
             del email_ids[i]
@@ -268,7 +264,7 @@ def semantically_query_inbox(query: str, start: date = None, end: date = None) -
     i = 0
     if start:
         while i < len(emails):
-            if emails[i].date < start:
+            if emails[i].sentOn < start:
                 del emails[i]
             else:
                 i += 1
@@ -276,7 +272,7 @@ def semantically_query_inbox(query: str, start: date = None, end: date = None) -
     i = 0
     if end:
         while i < len(emails):
-            if emails[i].date > end:
+            if emails[i].sentOn > end:
                 del emails[i]
             else:
                 i += 1
@@ -315,6 +311,24 @@ def extract_email_text(part):
                 return body
     return None
 
+def strip_whitespace(text: str) -> str:
+    return re.sub(r'\n +', "\n", re.sub(r'(?:\r\n)+', "\n", re.sub(r'( |\t)+', " ", text)))
+
+def strip_invisible_chars(text: str) -> str:
+    # Matches zero-width joiner, zero-width non-joiner, non-breaking space, etc.
+    invisible_chars = [
+        '\u034f',  # combining grapheme joiner
+        '\u200b',  # zero-width space
+        '\u200c',  # zero-width non-joiner
+        '\u200d',  # zero-width joiner
+        '\u2060',  # word joiner
+        '\ufeff',  # BOM
+        '\u00a0',  # non-breaking space
+        '\u2019',
+        '\u2013'
+    ]
+    pattern = "[" + "".join(invisible_chars) + "]"
+    return re.sub(pattern, "", text)
 
 init_gmail(utils.creds)
   

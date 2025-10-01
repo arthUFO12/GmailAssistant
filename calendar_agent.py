@@ -39,7 +39,7 @@ RULES:
 - If a request is vague ask for more information.
 - You MUST check user availability before scheduling events and tasks. If there are conflicts, inform the chatbot with the exact times of conflicts and hold off on scheduling tasks. 
 - Give dates in RFC 3339 format.
-- Use the `Respond` tool to respond to the chatbot with a request completion notification or the information they requested when you are done."""
+- You MUST use the `Respond` tool to respond to the chatbot with a request completion notification or the information they requested when you are done."""
 
 REQUEST_STATUS = Enum("REQUEST_STATUS", { "FAILURE": "failure", "SUCCESS": "success" })
 
@@ -125,7 +125,7 @@ class Respond(BaseModel):
 tools = [change_event_time, cancel_event, change_task_time, cancel_task, search_user_availability]
 tool_node = ToolNode(tools)
 
-summarizer = ChatGoogleGenerativeAI(model='gemini-1.5-pro')
+summarizer = ChatGoogleGenerativeAI(model='gemini-2.5-pro')
 
 c_agent = summarizer.bind_tools(tools + [AskQuestion, Respond, CreateTask, CreateEvent])
 
@@ -154,6 +154,7 @@ def respond(state):
 def route(state):
     messages = state["messages"]
     last_message = messages[-1]
+
     if last_message.tool_calls[0]['name'] == "AskQuestion":
         return "ask_question"
     elif last_message.tool_calls[0]['name'] == "Respond":
@@ -169,8 +170,7 @@ def call_agent(state):
     messages = state["messages"]
 
     response = c_agent.invoke(messages)
-    print(response.content)
-    print(response.tool_calls[0]['name'])
+    
     
     return {"messages": messages + [response]}
 
@@ -232,8 +232,7 @@ def start_workflow(request: str = None, answer: str = None):
         return (events[-1]['messages'][-1].tool_calls[0]['args']['question'],True)
     else:
         memory.storage.clear()
-        for i in events[-1]['messages']:
-            i.pretty_print()
+        
         return (events[-1]['messages'][-1].content, False)
     
 # inp = None

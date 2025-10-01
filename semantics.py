@@ -1,6 +1,7 @@
 from data_schemas import Email
 from datetime import date
 import numpy as np
+
 import faiss
 import requests
 import os
@@ -15,7 +16,8 @@ creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-pl
 creds.refresh(Request())
 
 EMBEDDING_SIZE = 3072
-INDEX_FILE = 'index.faiss'
+INDEX_FILE = './data/index.faiss'
+EMAIL_ID_FILE = 'email_ids.csv'
 
 url = "https://us-central1-aiplatform.googleapis.com/v1/projects/starry-diode-464720-n0/locations/us-central1/publishers/google/models/gemini-embedding-001:predict"
 
@@ -29,7 +31,7 @@ if os.path.exists(INDEX_FILE):
 else:
     index = faiss.IndexFlatIP(EMBEDDING_SIZE)
 
-index_list = utils.get_json_field("config.json", "index")
+index_list = utils.load_email_ids(EMAIL_ID_FILE)
 
 def parse_embeddings_json(response: requests.Response):
     obj = response.json()
@@ -43,15 +45,20 @@ def parse_embeddings_json(response: requests.Response):
 
 
 def add_embeddings(emails: list[Email]):
+    global index, index_list
+
     for i in range(0, len(emails), 10):
         embedding_map = split_texts(emails[i:i+10])
-        index_list.extend(embedding_map[0])
+        
+        index_list = np.append(index_list, embedding_map[0])
         response = requests.post(url, headers=headers, json= { "instances": [{"content": text} for text in embedding_map[1]] })
         index.add(np.ascontiguousarray(
             np.array(parse_embeddings_json(response), dtype='float32')
         ))
     
 def query_index(query: str, k: int) -> list[str]:
+    global index, index_list
+
     response = requests.post(url, headers=headers, json= { "instances": [{"content": query}] })
     query_embedding = parse_embeddings_json(response)[0]
     
@@ -73,5 +80,5 @@ def split_texts(emails: list[Email]):
 
 def save_index():
     faiss.write_index(index, INDEX_FILE)
-    utils.update_json("config.json", "index", index_list)
+    utils.save_email_ids(EMAIL_ID_FILE, index_list)
 

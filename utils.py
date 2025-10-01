@@ -9,6 +9,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build, Resource
 from googleapiclient.errors import HttpError
+import pandas as pd
+import numpy as np
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify",
         "https://www.googleapis.com/auth/calendar",
@@ -37,6 +39,18 @@ def get_json_field(filename: str, key: str):
         data = json.load(f)
 
     return data.get(key, None)
+
+def save_email_ids(filename: str, ids: np.ndarray):
+    df = pd.DataFrame({ "email_ids": ids})
+    df.to_csv(f'./data/{filename}')
+
+
+def load_email_ids(filename: str) -> np.ndarray:
+    if os.path.exists(f'./data/{filename}'):
+        df = pd.read_csv(f'./data/{filename}')
+        return df['email_ids'].to_numpy()
+    
+    return np.array([])
 
 def get_creds():
     creds = None

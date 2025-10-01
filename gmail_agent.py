@@ -19,6 +19,7 @@ from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.memory import InMemorySaver
 
 from data_schemas import CreateEvent, CreateTask, Email
+from classification import UserLabelEnum
 import calendar_tools
 import gmail_tools
 import utils
@@ -45,7 +46,10 @@ Behavior example:
 2. Determine which tool is needed.
 3. Call the tool with the appropriate arguments.
 4. Include reasoning/thoughts if helpful
-5. Use the `Respond` tool to reply to the request."""
+5. Use the `Respond` tool to reply to the request.
+
+Rules:
+1. By default set the start time of your email search queries to a week ago, unless told otherwise."""
 
 
 REQUEST_STATUS = Enum("REQUEST_STATUS", { "FAILURE": "failure", "SUCCESS": "success" })
@@ -55,7 +59,7 @@ REQUEST_STATUS = Enum("REQUEST_STATUS", { "FAILURE": "failure", "SUCCESS": "succ
 @validate_call
 def add_label_to_email(
         email_id: str = Field(..., description="The id of the email to add the label to."), 
-        label_name:str = Field(..., description="The label name.")
+        label_name: UserLabelEnum = Field(..., description="The label name.")
     ):
     """Used to add a label to an email"""
     return gmail_tools.add_email_label(email_id, label_name)
@@ -65,9 +69,9 @@ def add_label_to_email(
 @validate_call
 def remove_label_from_email(
         email_id: str = Field(..., description="The id of the email to remove the label from."), 
-        label_name:str = Field(..., description="The label name.")
+        label_name: UserLabelEnum = Field(..., description="The label name.")
     ):
-    """Used to remove a label form an email"""
+    """Used to remove a label from an email"""
     return gmail_tools.remove_email_label(email_id, label_name)
 
 
@@ -107,7 +111,7 @@ class Respond(BaseModel):
 tools = [add_label_to_email, remove_label_from_email, keyword_query_inbox, semantically_query_inbox]
 tool_node = ToolNode(tools)
 
-summarizer = ChatGoogleGenerativeAI(model='gemini-1.5-pro')
+summarizer = ChatGoogleGenerativeAI(model='gemini-2.5-pro')
 
 g_agent = summarizer.bind_tools(tools + [AskQuestion, Respond])
 
@@ -143,13 +147,13 @@ def route(state):
     else:
         return "action"
     
+
+    
 def call_agent(state):
     messages = state["messages"]
 
-    print(messages[-1].content)
+
     response = g_agent.invoke(messages)
-    print(response.content)
-    print(response.tool_calls[0]['name'])
     
     return {"messages": messages + [response]}
 
@@ -209,19 +213,7 @@ def start_workflow(request: str = None, answer: str = None):
         return (events[-1]['messages'][-1].tool_calls[0]['args']['question'],True)
     else:
         memory.storage.clear()
-        for i in events[-1]['messages']:
-            i.pretty_print()
+        
         return (events[-1]['messages'][-1].content, False)
     
 
-inp = None
-
-while True:
-    res = start_workflow("""{
-    "task": "Are there any emails about meetings or gatherings? Search semantically. Give a summary of their content."
-}""", answer=inp)
-    if res[1]:
-        inp = input(res[0])
-        continue
-    else:
-        break
