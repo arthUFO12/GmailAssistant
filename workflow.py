@@ -6,13 +6,15 @@ import gmail_tools
 import utils
 import chatbot
 from pynput import mouse
+from datetime import date
 from data_schemas import Email
 
 notifier = threading.Condition()
 agent_relevant_categories = set(['needs_action', 'to_schedule'])
 
 agent_relevant_emails = []
-end = True
+end = False
+
 
 
 def process_emails(emails: list[Email]):
@@ -23,7 +25,7 @@ def process_emails(emails: list[Email]):
         if classifications[i] in agent_relevant_categories:
             agent_relevant_emails.append(emails[i])
 
-        
+
 
 
 def mouse_listener():

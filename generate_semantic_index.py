@@ -8,7 +8,7 @@ from data_schemas import Email
 def generate_index():
     today_time = date.today()
     timestep = timedelta(days=5)
-    curr_time = today_time - timedelta(days=180)
+    curr_time = today_time - timedelta(days=365)
 
 
     while curr_time < today_time:
@@ -22,6 +22,8 @@ def generate_index():
 
     
     semantics.save_index()
+
+
 
 
 

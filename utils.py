@@ -41,8 +41,6 @@ def get_json_field(filename: str, key: str):
     return data.get(key, None)
 
 def save_data(idx: pd.DataFrame):
-    idx.set_index('Date', errors='coerce')
-    idx.sort_index()
     idx.to_csv('./data/index.csv')
     idx.to_parquet('./data/index.parquet', engine='fastparquet')
 
@@ -56,8 +54,9 @@ def load_data() -> pd.DataFrame:
     
 
     df = pd.DataFrame(columns=['Date', 'Email_IDs'] + [f'Embedding_{i}' for i in range(3072)])
-    df['Date'] = pd.to_datetime(df['Date'])
-    df.set_index('Date', errors='coerce')
+    df['Date'] = pd.to_datetime(df['Date'],  errors='coerce')
+    df = df.set_index('Date')
+
 
     return df
 

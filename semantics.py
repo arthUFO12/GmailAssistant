@@ -48,16 +48,16 @@ def add_embeddings(emails: list[Email]):
         
 
         
-        index_list = np.append(index_list, embedding_map[0])
+
         response = requests.post(url, headers=headers, json= { "instances": [{"content": text} for text in embedding_map[1]] })
 
-        data = pd.concat(
+        data = pd.concat((
             data, 
             pd.DataFrame(
                 np.concat((embedding_map[0], parse_embeddings_json(response)), axis=1), 
                 columns=['Date', 'Email_IDs'] + [f'Embedding_{i}' for i in range(EMBEDDING_SIZE)]
             )
-        )
+        ))
         
     
 def query_index(query: str, k: int, start: date = None, end: date = None) -> list[str]:
@@ -91,9 +91,10 @@ def split_texts(emails: list[Email]):
 
     embedding_map = ([], [])
     for email in emails:
-        for i in range(0, len(email.text), 1900):
+        email_txt = email.model_dump_json(exclude={'sentOn', 'email_id'})
+        for i in range(0, len(email.text), 900):
             embedding_map[0].append([email.sentOn, email.email_id])
-            embedding_map[1].append(email.text[i: i + 2000])
+            embedding_map[1].append(email_txt[i: i + 1000])
 
     return embedding_map
 

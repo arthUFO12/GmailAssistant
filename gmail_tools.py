@@ -220,15 +220,15 @@ def init_gmail(creds):
 
 
 def keyword_query_inbox(keywords: str, subject: str = None, start: date = None, end: date = None, 
-                sender: str = None) -> dict:
+                sender: str = None) -> list[Email]:
     
     subject_query = '' if subject is None else f'subject:{subject} '
     start_query = '' if start is None else f'after:{start.strftime("%Y/%m/%d")} '
     end_query = '' if end is None else f'before:{end.strftime("%Y/%m/%d")} '
     sender_query = '' if sender is None else f'from:{sender} '
-    query = keywords + ' ' + subject_query + sender_query + start_query + end_query 
+    query = start_query + end_query 
     
-    results = gmail.users().messages().list(userId='me', q=query, maxResults=5).execute()
+    results = gmail.users().messages().list(userId='me', q=query, maxResults=150).execute()
 
     messages = results.get('messages', [])
     msgs = [msg['id'] for msg in messages]
@@ -237,13 +237,10 @@ def keyword_query_inbox(keywords: str, subject: str = None, start: date = None, 
 
     for msg in msgs:
         email = _retrieve_email_from_id(gmail, msg)
-        query_results.append(email.to_dict())
+        query_results.append(email)
 
-    return json.dumps({
-        "status": "success",
-        "result": "fetched query matching emails",
-        "emails" : query_results
-    }, indent=2)
+    return query_results
+   
     
 
 def semantically_query_inbox(query: str, start: date = None, end: date = None) -> dict:
@@ -276,7 +273,7 @@ def strip_html(html: str) -> str:
     newline_tags = r'</?(p|div|br|li|ul|ol|tr|h[1-6])[^>]*>'
     text = re.sub(newline_tags, '\n', html, flags=re.IGNORECASE)
     text = re.sub(r'<[^>]+>', '', text)
-
+    text = re.sub(r'(&zwnj;)+', '', text)
     return text
 
 def replace_helper(match: re.Match) -> str:
@@ -311,8 +308,7 @@ def strip_invisible_chars(text: str) -> str:
         '\ufeff',  # BOM
         '\u00a0',  # non-breaking space
         '\u2019',
-        '\u2013',
-        '&zwnj;'
+        '\u2013'
     ]
     pattern = "[" + "".join(invisible_chars) + "]"
     return re.sub(pattern, "", text)
