@@ -10,10 +10,10 @@ This project implements agentic use of Large Language Models, semantic embedding
 5. Gmail management. The gmail agent has access to your gmail inbox and can search for messages by keyword or through semantic meaning via the vector database. Can also manage labels attached to emails.
 
 ### Previews
-<img width="500" height="300" alt="Screenshot 2025-10-01 at 1 04 32 AM" src="https://github.com/user-attachments/assets/a41d4cae-0494-4501-a26e-5cea76a240fa" /><img width="300" height="300" alt="Screenshot 2025-10-01 at 10 34 35 PM" src="https://github.com/user-attachments/assets/634cc272-1202-4d58-bfd0-ed54620b551a" />
+<img width="600" height="380" alt="Screenshot 2025-10-01 at 1 04 32 AM" src="https://github.com/user-attachments/assets/a41d4cae-0494-4501-a26e-5cea76a240fa" /><img width="300" height="300" alt="Screenshot 2025-10-01 at 10 34 35 PM" src="https://github.com/user-attachments/assets/634cc272-1202-4d58-bfd0-ed54620b551a" />
 
 
-<img width="500" height="235" alt="Screenshot 2025-10-01 at 7 49 17 PM" src="https://github.com/user-attachments/assets/818eca47-96f7-4046-996a-46e6c377e151" /><img width="300" height="175" alt="Screenshot 2025-10-01 at 7 50 11 PM" src="https://github.com/user-attachments/assets/8eba2cfe-e4d3-42d6-9ffa-6d39dca2fe2a" />
+<img width="600" height="285" alt="Screenshot 2025-10-01 at 7 49 17 PM" src="https://github.com/user-attachments/assets/818eca47-96f7-4046-996a-46e6c377e151" /><img width="300" height="175" alt="Screenshot 2025-10-01 at 7 50 11 PM" src="https://github.com/user-attachments/assets/8eba2cfe-e4d3-42d6-9ffa-6d39dca2fe2a" />
 
 
 
