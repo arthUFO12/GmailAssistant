@@ -40,17 +40,27 @@ def get_json_field(filename: str, key: str):
 
     return data.get(key, None)
 
-def save_email_ids(filename: str, ids: np.ndarray):
-    df = pd.DataFrame({ "email_ids": ids})
-    df.to_csv(f'./data/{filename}')
+def save_data(idx: pd.DataFrame):
+    idx.set_index('Date', errors='coerce')
+    idx.sort_index()
+    idx.to_csv('./data/index.csv')
+    idx.to_parquet('./data/index.parquet', engine='fastparquet')
 
 
-def load_email_ids(filename: str) -> np.ndarray:
-    if os.path.exists(f'./data/{filename}'):
-        df = pd.read_csv(f'./data/{filename}')
-        return df['email_ids'].to_numpy()
+def load_data() -> pd.DataFrame:
+    if os.path.exists(f'./data/index.parquet'):
+        df = pd.read_parquet(f'./data/index.parquet', engine='fastparquet')
+
+
+        return df
     
-    return np.array([])
+
+    df = pd.DataFrame(columns=['Date', 'Email_IDs'] + [f'Embedding_{i}' for i in range(3072)])
+    df['Date'] = pd.to_datetime(df['Date'])
+    df.set_index('Date', errors='coerce')
+
+    return df
+
 
 def get_creds():
     creds = None

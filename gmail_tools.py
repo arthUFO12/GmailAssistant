@@ -192,6 +192,7 @@ def _retrieve_new_emails(worker_gmail: Resource, history_id) -> list[Email]:
 def _check_for_new_email(worker_gmail: Resource, func: Callable, *args):
     
     latest_id = worker_gmail.users().getProfile(userId='me').execute()['historyId']
+    utils.update_json('config.json', 'history_id', latest_id)
 
     while True:
         time.sleep(5.)
@@ -247,7 +248,7 @@ def keyword_query_inbox(keywords: str, subject: str = None, start: date = None, 
 
 def semantically_query_inbox(query: str, start: date = None, end: date = None) -> dict:
 
-    email_ids = semantics.query_index(query, 5)
+    email_ids = semantics.query_index(query, 5, start, end)
     seen = set()
     i = 0
 
@@ -259,28 +260,13 @@ def semantically_query_inbox(query: str, start: date = None, end: date = None) -
             i += 1
 
 
-    emails = [_retrieve_email_from_id(gmail, e_id) for e_id in email_ids]
+    emails = [_retrieve_email_from_id(gmail, e_id).to_dict() for e_id in email_ids]
 
-    i = 0
-    if start:
-        while i < len(emails):
-            if emails[i].sentOn < start:
-                del emails[i]
-            else:
-                i += 1
-
-    i = 0
-    if end:
-        while i < len(emails):
-            if emails[i].sentOn > end:
-                del emails[i]
-            else:
-                i += 1
-            
+    
     return json.dumps({
         "status": "success",
         "result": "fetched query matching emails",
-        "emails": [email.to_dict() for email in emails]
+        "emails": emails
     }, indent=2)
 
 def strip_urls(text: str) -> str:
@@ -325,7 +311,8 @@ def strip_invisible_chars(text: str) -> str:
         '\ufeff',  # BOM
         '\u00a0',  # non-breaking space
         '\u2019',
-        '\u2013'
+        '\u2013',
+        '&zwnj;'
     ]
     pattern = "[" + "".join(invisible_chars) + "]"
     return re.sub(pattern, "", text)

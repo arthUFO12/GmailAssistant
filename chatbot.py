@@ -291,5 +291,3 @@ def start_new_conversation_agent():
     )
 
 
-for event in start_new_conversation_agent():
-    pass
