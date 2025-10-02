@@ -24,7 +24,7 @@ import utils
 
 os.environ["GOOGLE_API_KEY"] = utils.get_json_field('config.json', 'gemini_key')
 
-SYSTEM_PROMPT = """You are a helpful AI agent responsible for managing a user's Google Calendar.
+SYSTEM_PROMPT = f"""You are a helpful AI agent responsible for managing a user's Google Calendar.
 An AI chatbot is talking to the user and will relay requests to you in order to help the user. Your goal is to fulfill chatbot's requests using ONLY the tools provided to you. 
 You should think step by step and decide when to use tools to take action. Ensure you reason in every response.
 Respond in this format:
@@ -33,13 +33,13 @@ Thought: [Your reasoning]
 Action: [The structured tool call JSON objects]
 
 INFO:
-Today's date is August 26th, 2025
+Today's date is {calendar_tools.today}
 
 RULES:
 - If a request is vague ask for more information.
 - You MUST check user availability before scheduling events and tasks. If there are conflicts, inform the chatbot with the exact times of conflicts and hold off on scheduling tasks. 
 - Give dates in RFC 3339 format.
-- Use the `Respond` tool to respond to the chatbot with a request completion notification or the information they requested when you are done."""
+- You MUST use the `Respond` tool to respond to the chatbot with a request completion notification or the information they requested when you are done."""
 
 REQUEST_STATUS = Enum("REQUEST_STATUS", { "FAILURE": "failure", "SUCCESS": "success" })
 
@@ -51,7 +51,12 @@ def search_user_availability(
     ):
     """Use this to check the user's availability.
 Instructions: Enter the start and end times to search. You will receive a list of event objects back.\n Event object important fields:\n 1. summary - name of the event.\n 2. start - start time and timezone of the event.\n 3. end - end time and timezone of the event."""
-    return json.dumps({"events": calendar_tools.get_events_in_range(start,end), "tasks": calendar_tools.get_tasks_in_range(start,end)}, indent=2)
+    return json.dumps({
+        "status": "success",
+        "summary": "fetched events and tasks in specified range",
+        "events": calendar_tools.get_events_in_range(start,end), 
+        "tasks": calendar_tools.get_tasks_in_range(start,end)
+    }, indent=2)
 
 @tool
 @validate_call
@@ -120,7 +125,7 @@ class Respond(BaseModel):
 tools = [change_event_time, cancel_event, change_task_time, cancel_task, search_user_availability]
 tool_node = ToolNode(tools)
 
-summarizer = ChatGoogleGenerativeAI(model='gemini-1.5-pro')
+summarizer = ChatGoogleGenerativeAI(model='gemini-2.5-pro')
 
 c_agent = summarizer.bind_tools(tools + [AskQuestion, Respond, CreateTask, CreateEvent])
 
@@ -149,6 +154,7 @@ def respond(state):
 def route(state):
     messages = state["messages"]
     last_message = messages[-1]
+
     if last_message.tool_calls[0]['name'] == "AskQuestion":
         return "ask_question"
     elif last_message.tool_calls[0]['name'] == "Respond":
@@ -164,8 +170,7 @@ def call_agent(state):
     messages = state["messages"]
 
     response = c_agent.invoke(messages)
-    print(response.content)
-    print(response.tool_calls[0]['name'])
+    
     
     return {"messages": messages + [response]}
 
@@ -227,8 +232,7 @@ def start_workflow(request: str = None, answer: str = None):
         return (events[-1]['messages'][-1].tool_calls[0]['args']['question'],True)
     else:
         memory.storage.clear()
-        for i in events[-1]['messages']:
-            i.pretty_print()
+        
         return (events[-1]['messages'][-1].content, False)
     
 # inp = None

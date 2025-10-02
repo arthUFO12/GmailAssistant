@@ -9,6 +9,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build, Resource
 from googleapiclient.errors import HttpError
+import pandas as pd
+import numpy as np
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify",
         "https://www.googleapis.com/auth/calendar",
@@ -37,6 +39,27 @@ def get_json_field(filename: str, key: str):
         data = json.load(f)
 
     return data.get(key, None)
+
+def save_data(idx: pd.DataFrame):
+    idx.to_csv('./data/index.csv')
+    idx.to_parquet('./data/index.parquet', engine='fastparquet')
+
+
+def load_data() -> pd.DataFrame:
+    if os.path.exists(f'./data/index.parquet'):
+        df = pd.read_parquet(f'./data/index.parquet', engine='fastparquet')
+
+
+        return df
+    
+
+    df = pd.DataFrame(columns=['Date', 'Email_IDs'] + [f'Embedding_{i}' for i in range(3072)])
+    df['Date'] = pd.to_datetime(df['Date'],  errors='coerce')
+    df = df.set_index('Date')
+
+
+    return df
+
 
 def get_creds():
     creds = None

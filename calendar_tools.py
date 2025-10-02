@@ -170,6 +170,7 @@ def get_events_in_range(start: datetime, end: datetime) -> list:
             orderBy='startTime'
         ).execute()
     except HttpError as error:
+        print(error)
         return [error]
 
     events = events_result.get('items', [])
